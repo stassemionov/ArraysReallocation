@@ -57,27 +57,39 @@ inline long f_ind(const long& i)
 
 double* case1(double* A, int M, int N, int m, int n)
 {
-	long fi = 0;
+//	long fi = 0;
 	double* s = new double[b2];
 	double* b = new double[b2];
 	int len = b2*sizeof(double);
 
 	for (int v = 0; v < M / b1; ++v)	// по горизонтальным полосам
 	{
-		long i = v * N + b2;	// Итерации начинаются с элемента b2, т.к. первые b2 элементов не требуют перемещения.
-		memcpy(s, A + v*N + b2, len);
+		long i = v * N * b1 + b2;	// Итерации начинаются с элемента b2, т.к. первые b2 элементов не требуют перемещения.
+		memcpy(s, A + i, len);
 		for (long k = 0; k < b1*N - 2*b2; k += b2)	// действия в пределах выбранной полосы
 		{
-			fi = f_ind(i);
+			i = f_ind(i);
 
-			memcpy(b, A + fi, len);
-			memcpy(A + fi, s, len);
+			memcpy(b, A + i, len);
+			memcpy(A + i, s, len);
 			memcpy(s, b, len);
 		}
 	}
 
-	int L = ((M % b1 == 1) ? N + 2 * b2 : b2 + 1);
+	int last_stride_h = M % b1;
+	if (last_stride_h > 1)
+	{
+		long i = (M - last_stride_h) * N + b2;
+		memcpy(s, A + i, len);
+		for (long k = 0; k < last_stride_h*N - 2*b2; k += b2)
+		{
+			i = f_ind(i);
 
+			memcpy(b, A + i, len);
+			memcpy(A + i, s, len);
+			memcpy(s, b, len);
+		}
+	}
 	return A;
 }
 
@@ -87,13 +99,13 @@ double* block_reallocate_matrix(double* A, int M, int N, int m, int n)
 	NN = N;
 	b1 = m;
 	b2 = n;
-	if (N % n == 0)
+//	if (N % n == 0)
 	{
 		return case1(A, M, N, m, n);
 	}
-	else
+//	else
 	{
-		return case1(A, M, N, m, n);
+//		return case1(A, M, N, m, n);
 	}
 }
 

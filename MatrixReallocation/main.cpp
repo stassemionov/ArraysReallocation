@@ -30,9 +30,9 @@ int main()
 	data = block_reallocate_matrix(data, N1, N2, b1, b2);
 
 	cout << "Результат:\n";
-	print_to(cout, data, N1, N2, 4);
+//	print_to(cout, data, N1, N2, 4);
 	cout << "Эталон:\n";
-	print_to(cout, dt,   N1, N2, 4);
+//	print_to(cout, dt,   N1, N2, 4);
 	cout << "Норма разности: ";
 	cout << compare_arrays(dt, data, N1*N2) << endl << endl;
 
