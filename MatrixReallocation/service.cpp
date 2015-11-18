@@ -1,4 +1,4 @@
-#include "service.h"
+﻿#include "service.h"
 
 #include <cstdlib>
 #include <ctime>
@@ -7,10 +7,8 @@
 
 using namespace std;
 
-#define _MIN_(x,y) (((x) < (y)) ? (x) : (y))
-
 // M x N matrix generating
-double* generate(double* A, int M, int N, double lbound, double ubound)
+double* generate(double* A, const int M, const int N, const double lbound, const double ubound)
 {
 	double rnd = (ubound - lbound) / RAND_MAX;
 	srand((int)time(NULL));
@@ -21,7 +19,7 @@ double* generate(double* A, int M, int N, double lbound, double ubound)
 	return A;
 }
 
-double* simple_fill(double* A, int M, int N)
+double* simple_fill(double* A, const int M, const int N)
 {
 	for (long i = 0; i < M*N; ++i)
 	{
@@ -30,9 +28,9 @@ double* simple_fill(double* A, int M, int N)
 	return A;
 }
 
-void print_to(ostream& ostr, double* A, int M, int N, int place)
+void print_to(ostream& ostr, const double* A, const int M, const int N, const int place)
 {
-	double* a = A;
+	const double* a = A;
 	for (int i = 0; i < M; ++i)
 	{
 		for (int j = 0; j < N; ++j)
@@ -45,21 +43,14 @@ void print_to(ostream& ostr, double* A, int M, int N, int place)
 	ostr << '\n';
 }
 
+/*
 // Block-by-block output of block-allocated array
 void block_print_to(ostream& ostr, double* A, int M, int N, int m, int n, int place)
-{/*
-	for (int i = 0; i < M*N; )
-	{
-		for (int k = 0; k < _MIN_(m*n,M*N%m*n); ++j)
-		{
-			ostr << setw(place) << A[i];
-		}
-		ostr << '\n';
-	}
-	ostr << '\n';*/
+{
 }
+*/
 
-double compare_arrays(double* A, double* B, long N)
+double compare_arrays(const double* A, const double* B, const long long N)
 {
 	double s = 0;
 	for (long i = 0; i < N; ++i)

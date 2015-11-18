@@ -1,4 +1,4 @@
-#include <cstdlib>
+ï»¿#include <cstdlib>
 #include <fstream>
 
 #include "reallocating.h"
@@ -26,14 +26,14 @@ int main()
 	double* data = new double[N1*N2];	
 	data = simple_fill(data, N1, N2);
 
-	double* dt = buffer_reallocating(data, N1, N2, b1, b2);
+	double* dt = get_reallocated(data, N1, N2, b1, b2);
 	data = block_reallocate_matrix(data, N1, N2, b1, b2);
 
-	cout << "Ðåçóëüòàò:\n";
+	cout << "Ð ÐµÐ·ÑƒÐ»ÑŒÑ‚Ð°Ñ‚:\n";
 //	print_to(cout, data, N1, N2, 4);
-	cout << "Ýòàëîí:\n";
+	cout << "Ð­Ñ‚Ð°Ð»Ð¾Ð½:\n";
 //	print_to(cout, dt,   N1, N2, 4);
-	cout << "Íîðìà ðàçíîñòè: ";
+	cout << "ÐÐ¾Ñ€Ð¼Ð° Ñ€Ð°Ð·Ð½Ð¾ÑÑ‚Ð¸: ";
 	cout << compare_arrays(dt, data, N1*N2) << endl << endl;
 
 	delete[] data;
