@@ -5,6 +5,7 @@
 
 using namespace std;
 
+#include <vector>
 #include <iostream>
 #include <iomanip>
 
@@ -59,6 +60,24 @@ inline long long f_ind(const long long& i)
 	}
 }
 
+bool is_new_cycle(const long long i, const vector<long long>& sdr_vec)
+{
+	long long next = i;
+	do
+	{
+		for (size_t j = 0; j < sdr_vec.size(); ++j)
+		{
+			if (next == sdr_vec[j])
+			{
+				return false;
+			}
+		}
+		next = f_ind(next);
+	} 
+	while (next != i);
+	return true;
+}
+
 double* case1(double* A, const int M, const int N, const int m, const int n)
 {
 //	for (long k = 0; k < b1*N - 2*b2; k += b2)
@@ -66,22 +85,27 @@ double* case1(double* A, const int M, const int N, const int m, const int n)
 	double* s = new double[n];
 	double* b = new double[n];
 	const int len = n*sizeof(double);
+	vector<long long> sdr_vec; // system of distinct representatives of cycles
 
-	for (int v = 0; v < M / m; ++v)	// по горизонтальным полосам
+	for (int v = 0; v < (int) ceil(M / m); ++v)	// по горизонтальным полосам
 	{
 		long long i = v * N * m + n;	// Итерации начинаются с элемента 'n', т.к. первые 'n' элементов не требуют перемещения.
 		long long max_index = i;	// максимальный индекс среди элементов, попавших в очередной цикл
-		const long long stripe_bound = (v + 1) * N * m;
+	//	const long long stripe_bound = (v + 1) * N * m;
+		const long long iteration_count = m * N - 2 * n;
+		long long it = 0;
+		sdr_vec.clear();
 		
-		while (max_index < stripe_bound)	// действия в пределах выбранной полосы
+		while (it < iteration_count)	// действия в пределах выбранной полосы
 		{
 			memcpy(s, A + i, len);
 			const long long first_in_cycle = i;
-			do 
+			sdr_vec.push_back(i);
+			do
 			{
-				cout << i+1 << " -- ";
+			//	cout << i+1 << " -- ";
 				i = f_ind(i);
-				cout << i+1 << endl;
+			//	cout << i+1 << endl;
 
 				if (max_index < i)
 				{
@@ -91,10 +115,20 @@ double* case1(double* A, const int M, const int N, const int m, const int n)
 				memcpy(b, A + i, len);
 				memcpy(A + i, s, len);
 				memcpy(s, b, len);
+
+				it += n;
 			} 
 			while (first_in_cycle != i);	// пока не попадем в начало цикла (элемент, с которого начинали)
-			i = (max_index += n);	// переход на следующий цикл (НЕВЕРНО)
-			cout << "CYCLE\n";
+			
+			long long next_cycle_begining = max_index - n;
+			while ( !is_new_cycle(next_cycle_begining, sdr_vec) )	// поиск следующего цикла
+			{
+				next_cycle_begining -= n;
+			}
+
+			i = next_cycle_begining;
+			max_index = 0;
+		//	cout << "CYCLE\n";
 		}
 	}
 /*
