@@ -5,7 +5,7 @@
 #include <fstream>
 #include <iomanip>
 
-using namespace std;
+using std::setw;
 
 // M x N matrix generating
 double* generate(double* A, const int M, const int N, const double lbound, const double ubound)
@@ -42,13 +42,6 @@ void print_to(ostream& ostr, const double* A, const int M, const int N, const in
 	}
 	ostr << '\n';
 }
-
-/*
-// Block-by-block output of block-allocated array
-void block_print_to(ostream& ostr, double* A, int M, int N, int m, int n, int place)
-{
-}
-*/
 
 double compare_arrays(const double* A, const double* B, const long long N)
 {

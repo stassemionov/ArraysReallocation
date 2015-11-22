@@ -2,12 +2,9 @@
 
 #include <cstdlib>
 #include <cmath>
+#include <vector>
 
 using namespace std;
-
-#include <vector>
-#include <iostream>
-#include <iomanip>
 
 int MM, NN, b1, b2;
 
@@ -62,6 +59,7 @@ inline long long f_ind(const long long& i)
 
 bool is_new_cycle(const long long i, const vector<long long>& sdr_vec)
 {
+	// подсчитывать длину цикла? или другие его параметры?
 	long long next = i;
 	do
 	{
@@ -80,55 +78,64 @@ bool is_new_cycle(const long long i, const vector<long long>& sdr_vec)
 
 double* case1(double* A, const int M, const int N, const int m, const int n)
 {
-//	for (long k = 0; k < b1*N - 2*b2; k += b2)
-//	long fi = 0;
-	double* s = new double[n];
-	double* b = new double[n];
-	const int len = n*sizeof(double);
 	vector<long long> sdr_vec; // system of distinct representatives of cycles
 
-	for (int v = 0; v < (int) ceil(M / m); ++v)	// по горизонтальным полосам
+	// * Обучение алгоритма текущей картине распределения циклов
+	long long i = n;	// Итерации начинаются с элемента 'n', т.к. первые 'n' элементов не требуют перемещения.
+	long long max_index = i;	// максимальный индекс среди элементов, попавших в очередной цикл
+	const long long iteration_count = m * N - 2 * n;
+	long long it = 0;
+
+	while (it < iteration_count)
 	{
-		long long i = v * N * m + n;	// Итерации начинаются с элемента 'n', т.к. первые 'n' элементов не требуют перемещения.
-		long long max_index = i;	// максимальный индекс среди элементов, попавших в очередной цикл
-	//	const long long stripe_bound = (v + 1) * N * m;
-		const long long iteration_count = m * N - 2 * n;
-		long long it = 0;
-		sdr_vec.clear();
-		
-		while (it < iteration_count)	// действия в пределах выбранной полосы
+		const long long first_in_cycle = i;
+		sdr_vec.push_back(first_in_cycle);
+		do
 		{
-			memcpy(s, A + i, len);
-			const long long first_in_cycle = i;
-			sdr_vec.push_back(i);
-			do
+			i = f_ind(i);
+			if (max_index < i)
 			{
-			//	cout << i+1 << " -- ";
-				i = f_ind(i);
-			//	cout << i+1 << endl;
+				max_index = i;
+			}
+			it += n;
+		} 
+		while (first_in_cycle != i);	// пока не попадем в начало цикла (элемент, с которого начинали)
 
-				if (max_index < i)
-				{
-					max_index = i;
-				}
-
-				memcpy(b, A + i, len);
-				memcpy(A + i, s, len);
-				memcpy(s, b, len);
-
-				it += n;
-			} 
-			while (first_in_cycle != i);	// пока не попадем в начало цикла (элемент, с которого начинали)
-			
+		if (it < iteration_count)
+		{
 			long long next_cycle_begining = max_index - n;
-			while ( !is_new_cycle(next_cycle_begining, sdr_vec) )	// поиск следующего цикла
+			while (!is_new_cycle(next_cycle_begining, sdr_vec))	// поиск следующего цикла
 			{
 				next_cycle_begining -= n;
 			}
-
 			i = next_cycle_begining;
-			max_index = 0;
-		//	cout << "CYCLE\n";
+			max_index = i;
+		}		
+	}
+	// * Конец обучения
+		
+	double* s = new double[n];
+	double* b = new double[n];
+	const int len = n*sizeof(double);
+	const int stripe_size = m*N;
+
+	for (int v = 0; v < M / m; ++v)	// по горизонтальным полосам
+	{
+		size_t cycle_counter = 0;		
+		while (cycle_counter < sdr_vec.size())	// действия в пределах выбранной полосы
+		{
+			i = sdr_vec[cycle_counter++] + v*stripe_size;
+			memcpy(s, A + i, len);
+			const long long first_in_cycle = i;
+			do
+			{
+				i = f_ind(i);
+			
+				memcpy(b, A + i, len);
+				memcpy(A + i, s, len);
+				memcpy(s, b, len);
+			} 
+			while (first_in_cycle != i);	// пока не попадем в начало цикла (элемент, с которого начинали)
 		}
 	}
 /*
