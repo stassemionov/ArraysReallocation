@@ -7,48 +7,51 @@
 
 using std::setw;
 
-// M x N matrix generating
-double* generate(double* A, const int M, const int N, const double lbound, const double ubound)
+double* generate(double* data_ptr, const int rows_count, const int cols_count,
+    const double lbound, const double ubound)
 {
-	double rnd = (ubound - lbound) / RAND_MAX;
-	srand((int)time(NULL));
-	for (long i = 0; i < M*N; ++i)
-	{
-		A[i] = lbound + rand() * rnd;
-	}
-	return A;
+    double rnd = (ubound - lbound) / RAND_MAX;
+    srand(static_cast<int>(time(NULL)));
+    for (int i = 0; i < rows_count*cols_count; ++i)
+    {
+        data_ptr[i] = lbound + rand() * rnd;
+    }
+    return data_ptr;
 }
 
-double* simple_fill(double* A, const int M, const int N)
+double* simple_fill(double* data_ptr,
+    const int rows_count, const int cols_count)
 {
-	for (long i = 0; i < M*N; ++i)
-	{
-		A[i] = i+1;
-	}
-	return A;
+    for (int i = 0; i < rows_count*cols_count; ++i)
+    {
+        data_ptr[i] = i+1;
+    }
+    return data_ptr;
 }
 
-void print_to(ostream& ostr, const double* A, const int M, const int N, const int place)
+// Matrix data output to 'ostr' stream
+void print_to(ostream& ostr, const double* data_ptr,
+    const int rows_count, const int cols_count, const int place)
 {
-	const double* a = A;
-	for (int i = 0; i < M; ++i)
-	{
-		for (int j = 0; j < N; ++j)
-		{
-			ostr << setw(place) << a[j];
-		}
-		a += N;
-		ostr << '\n';
-	}
-	ostr << '\n';
+    const double* a = data_ptr;
+    for (int i = 0; i < rows_count; ++i)
+    {
+        for (int j = 0; j < cols_count; ++j)
+        {
+            ostr << setw(place) << a[j];
+        }
+        a += cols_count;
+        ostr << '\n';
+    }
+    ostr << '\n';
 }
 
-double compare_arrays(const double* A, const double* B, const long long N)
+double compare_arrays(const double* data1, const double* data2, const int len)
 {
-	double s = 0;
-	for (long i = 0; i < N; ++i)
-	{
-		s += abs(A[i] - B[i]);
-	}
-	return s;
+    double s = 0;
+    for (int i = 0; i < len; ++i)
+    {
+        s += abs(data1[i] - data2[i]);
+    }
+    return s;
 }
