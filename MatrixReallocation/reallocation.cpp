@@ -114,14 +114,16 @@ vector<int> cycles_distribution_learning(const int virtual_block_height = -1)
 
     // System of distinct representatives of cycles (SDR).
     vector<int> sdr_vec;
+    const int&& right_block_width = M_COLS % B_COLS;
+    const int&& iteration_count = (right_block_width == 0) ?
+        B_ROWS*M_COLS - 2*B_COLS : B_ROWS*M_COLS - B_COLS - right_block_width;
+    int it = 0;
+    const int step = (right_block_width == 0) ? B_COLS : 1;
     // Iterations starts with 'b2'-th element,
     // because first 'b2' elements don't need to be transfer.
     int i = B_COLS;
     // Maximum index among indexes of current cycle elements.
     int max_index = i;
-    const int&& iteration_count = B_ROWS * M_COLS - 2 * B_COLS;
-    int it = 0;
-    const int step = (M_COLS % B_COLS == 0) ? B_COLS : 1;
 
     // * Learning of current cycles distribution
     while (it < iteration_count)
@@ -231,7 +233,7 @@ double* block_reallocate_matrix(double* data_ptr, const int& m_rows,
     {
         sdr_vec_last_stripe = cycles_distribution_learning(last_stripe_h);
     }
-
+    
     // Reallocation
     const int&& stripe_size = B_ROWS * M_COLS;
     double* stripe_data_ptr = data_ptr;
