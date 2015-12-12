@@ -3,11 +3,28 @@
 #include <cstdlib>
 #include <cmath>
 #include <vector>
+#include <algorithm>
+
+#include "service.h"
+
+// #include "omp.h"
 
 using std::vector;
+using std::sort;
+using std::swap;
 
-// Task paramenters
-int M_ROWS, M_COLS, B_ROWS, B_COLS;
+// * Task paramenters
+static int M_ROWS;             // matrix rows count
+static int M_COLS;             // matrix columns count
+static int B_ROWS;             // block rows count
+static int B_COLS;             // block columns count
+static int M_BLOCK_ROWS;       // число блоков в направлении столбца
+static int M_BLOCK_COLS;       // число блоков в направлении строки
+static int DIF_ROWS;           // смещение сетки по столбцу
+static int DIF_COLS;           // смещение сетки по строке
+static int B_SIZE;             // площаль блока
+static int B_ROWS_SHIFT_SIZE;
+static int B_COLS_SHIFT_SIZE;
 
 inline void init_parameters(const int& rows_count, const int& cols_count,
     const int& block_rows_count, const int& block_cols_count)
@@ -16,6 +33,25 @@ inline void init_parameters(const int& rows_count, const int& cols_count,
     M_COLS = cols_count;
     B_ROWS = block_rows_count;
     B_COLS = block_cols_count;
+
+    M_BLOCK_ROWS = static_cast<int>(ceil((double)M_ROWS / B_ROWS));
+    M_BLOCK_COLS = static_cast<int>(ceil((double)M_COLS / B_COLS));
+    DIF_COLS = M_COLS % B_COLS;
+    DIF_ROWS = M_ROWS % B_ROWS;
+
+    B_SIZE = B_COLS * B_ROWS;
+    B_ROWS_SHIFT_SIZE = B_COLS*(B_ROWS - DIF_ROWS);
+    B_COLS_SHIFT_SIZE = (DIF_COLS == 0) ? 0 : B_ROWS * (B_COLS - DIF_COLS);
+}
+
+int get_nearest_greater_divisor(const int& divident, const int& divisor)
+{
+    int dt = divident, dr = divisor;
+    while (dt % dr != 0)
+    {
+        ++dr;
+    }
+    return dr;
 }
 
 inline int f_ind(const int& i);
@@ -37,66 +73,82 @@ double* get_reallocated(const double* data_ptr,
 
 inline int f_ind(const int& index)
 {
-    int&& row_i = static_cast<int>(index / M_COLS);
-    int&& col_i = index % M_COLS;
+    const int&& row_i = index / M_COLS;
+    const int&& col_i = index % M_COLS;
+
     // координаты блока
-    int&& row_b = row_i / B_ROWS;
-    int&& col_b = col_i / B_COLS;
-
-    // число блоков по столбцу (в направлении столбца)
-    int&& M_b = static_cast<int>(ceil((double) M_ROWS / B_ROWS));
-    // число блоков по строке (в направлении строки)
-    int&& N_b = static_cast<int>(ceil((double) M_COLS / B_COLS));
+    const int&& row_b = row_i / B_ROWS;
+    const int&& col_b = col_i / B_COLS;
+    
     // номер блока
-    int&& I = row_b * N_b + col_b;
-
+    // const int I = row_b * M_BLOCK_COLS + col_b;
     // координаты элемента в блоке
-//  int row_i_loc = row_i % b1;
-//  int col_i_loc = col_i % b2;
+    // int row_i_loc = row_i % b1;
+    // int col_i_loc = col_i % b2;
 
-    int w = ( (col_b == N_b - 1) && (M_COLS % B_COLS != 0) ) ?
-        M_COLS % B_COLS : B_COLS;
-    int&& shift = (row_i % B_ROWS) * w + (col_i % B_COLS);
-    int&& dif = M_COLS % B_COLS;
+    const int&& shift = ((col_b == M_BLOCK_COLS - 1) && (DIF_COLS != 0)) ?
+        (row_i % B_ROWS) * DIF_COLS + (col_i % B_COLS) :
+        (row_i % B_ROWS) * B_COLS   + (col_i % B_COLS);
 
     // Для нижних блоков нужно вычислить смещение
-    // границы сетки от границы матрицы
-    if ((row_b == M_b - 1) && (M_ROWS % B_ROWS != 0))
+    // границы сетки от границы матрицы, если оно есть
+    if ((row_b == M_BLOCK_ROWS - 1) && (DIF_ROWS != 0))
     {
-        if (dif == 0)
-            return  I*B_COLS*B_ROWS + shift -
-            col_b*B_COLS*(B_ROWS - M_ROWS % B_ROWS);
-        else
-            return  I*B_COLS*B_ROWS + shift -
-            row_b*B_ROWS*(B_COLS - dif) -
-            col_b*B_COLS*(B_ROWS - M_ROWS % B_ROWS);
+        return (row_b * M_BLOCK_COLS + col_b)*B_SIZE + shift
+            - row_b*B_COLS_SHIFT_SIZE - col_b*B_ROWS_SHIFT_SIZE;
     }
     else
     {
-        if (dif == 0)
-            return I*B_COLS*B_ROWS + shift;
-        else
-            return I*B_COLS*B_ROWS + shift
-            - row_b*B_ROWS*(B_COLS - dif);
+        return (row_b * M_BLOCK_COLS + col_b)*B_SIZE + shift
+            - row_b*B_COLS_SHIFT_SIZE;
     }
 }
 
-bool is_new_cycle(const int& index, const vector<int>& sdr_vec)
+bool m_find(const int& val, const vector<int>& vec)
+{
+    if (vec.empty())
+    {
+        return false;
+    }
+    if (val > vec[vec.size()-1])
+    {
+        return false;
+    }
+
+    int l = 0;
+    int r = static_cast<int>(vec.size()) - 1;
+    int m = 0;
+    while (l < r)
+    {
+        m = (l + r) / 2;
+        if (vec[m] < val)
+        {
+            l = m + 1;
+        }
+        else
+        {
+            r = m;
+        }
+    }
+    return vec[r] == val;
+}
+
+bool is_new_cycle(const int& index, vector<int>& help_vec)
 {
     int next = index;
-    size_t j, size = sdr_vec.size();
+    vector<int> hv;
+    int k = 1;
+    size_t size = help_vec.size();
     do
     {
-        for (j = 0; j < size; ++j)
+        if (m_find(next, help_vec))
         {
-            if (next == sdr_vec[j])
-            {
-                return false;
-            }
+            return false;
         }
         next = f_ind(next);
     }
     while (next != index);
+
     return true;
 }
 
@@ -114,45 +166,103 @@ vector<int> cycles_distribution_learning(const int virtual_block_height = -1)
 
     // System of distinct representatives of cycles (SDR).
     vector<int> sdr_vec;
-    const int&& right_block_width = M_COLS % B_COLS;
-    const int&& iteration_count = (right_block_width == 0) ?
-        B_ROWS*M_COLS - 2*B_COLS : B_ROWS*M_COLS - B_COLS - right_block_width;
-    int it = 0;
-    const int step = (right_block_width == 0) ? B_COLS : 1;
+    // Additional cycles representatives for new cycles searching speed-up.
+    vector<int> help_vec;
+    // Width of right block column (no multiplicity case)
+    const int right_block_width = M_COLS % B_COLS;
+    // Count of iterations to be done (sum of all cycles lengths)
+    const int iteration_count = (right_block_width == 0) ?
+        (B_ROWS*M_COLS - 2 * B_COLS) :
+        (B_ROWS*M_COLS - B_COLS - right_block_width);
+
+    int gcd_val = gcd(B_COLS, right_block_width);
+    // Step of iterations
+    // In case of multiplicity, every cycle width equals 'b2'.
+    // It means, we can transfer 'b2' elements with one step)
+    // Otherwise, cycle width equals GCD('b2','N2' mod 'b2').
+    const int step = (right_block_width == 0) ? B_COLS :
+        (((right_block_width > 1) && (gcd_val > 1)) ? gcd_val : 1);
     // Iterations starts with 'b2'-th element,
     // because first 'b2' elements don't need to be transfer.
     int i = B_COLS;
-    // Maximum index among indexes of current cycle elements.
-    int max_index = i;
+    // i = B_ROWS*M_COLS - ((right_block_width == 0) ? 
+    // B_COLS : right_block_width);
 
+    // Defines frequency of additional cycles representatives insertion.
+    // Requires O(b1) memory, because we have O(b1) cycles on average.
+    const int insertion_step = (B_ROWS*M_COLS) / (4 * B_ROWS);
+    // This counter controls count of
+    // additional cycles representatives insertion.
+    int insert_counter = 0;
+
+    int next_cycle_begining = i;
+    int it = 0;
     // * Learning of current cycles distribution
     while (it < iteration_count)
     {
-        const int first_in_cycle = i;
-        sdr_vec.push_back(first_in_cycle);
         // Do until cycle beginning isn't reached
-        // (first element in current pass)
+        // (first element of current pass)
+        int length = 0;
+        int min_index = M_COLS*B_ROWS;
+        int max_index = 0;
+        const int first = i;
         do
         {
+            // go to next position in this cycle
             i = f_ind(i);
+
+            // Statistics collecting...
+            if (min_index > i)
+            {
+                // Minimum index in current cycle
+                min_index = i;
+            }
             if (max_index < i)
             {
+                // Maximum index in current cycle
                 max_index = i;
             }
+            // Current cycle length
+            ++length;
+
+            // Iteration count is bounded by count of elements,
+            // which require to be transfer.
             it += step;
+
+            // Insertion additional indices
+            if ((++insert_counter) % insertion_step == 0)
+            {
+                if (!m_find(i, help_vec))
+                {
+                    help_vec.push_back(i);
+                    sort(help_vec.begin(), help_vec.end());
+                }
+            }
         }
-        while (first_in_cycle != i);
+        while (i != first);
+
+        // We don't need to collect indices of cycles of 1 element
+        if (length > 1)
+        {
+            sdr_vec.push_back(min_index);
+            if (!m_find(i, help_vec))
+            {
+                help_vec.push_back(i);
+                sort(help_vec.begin(), help_vec.end());
+            }
+            // printf("\nMIN = %d \nMAX = %d\nLEN = %d\n",
+            // min_index, max_index, length);
+        }
 
         if (it < iteration_count)
         {
-            int&& next_cycle_begining = max_index - step;
             // Next cycle searching
-            while (!is_new_cycle(next_cycle_begining, sdr_vec))
+            do
             {
-                next_cycle_begining -= step;
+                next_cycle_begining += step;
             }
+            while (!is_new_cycle(next_cycle_begining, help_vec));
             i = next_cycle_begining;
-            max_index = i;
         }
     }
     // * End of learning
@@ -162,6 +272,9 @@ vector<int> cycles_distribution_learning(const int virtual_block_height = -1)
     {
         init_parameters(M_ROWS, M_COLS, save_b_rows_value, B_COLS);
     }
+
+    // printf("\n\n HELP %zd \n", help_vec.size());
+    // printf("\n SDR  %zd \n\n", sdr_vec.size());
 
     return sdr_vec;
 }
@@ -185,8 +298,11 @@ void reallocate_stripe(double* stripe_data, const vector<int>& sdr_vec,
     double* buffer1 = new double[B_COLS];
     double* buffer2 = new double[B_COLS];
     double* loc_data_ptr;
-    const int len = (M_COLS % B_COLS == 0) ?
-        B_COLS * sizeof(double) : sizeof(double);
+    const int right_block_width = M_COLS % B_COLS;
+
+    const int gcd_val = gcd(B_COLS, right_block_width);
+    const int len = sizeof(double)* ((right_block_width == 0) ? B_COLS :
+        (((right_block_width > 1) && (gcd_val > 1)) ? gcd_val : 1));
 
     size_t cycle_counter = 0;
     // Reallocation within the bounds of current block stripe
@@ -204,7 +320,7 @@ void reallocate_stripe(double* stripe_data, const vector<int>& sdr_vec,
 
             memcpy(buffer2, loc_data_ptr, len);
             memcpy(loc_data_ptr, buffer1, len);
-            memcpy(buffer1, buffer2, len);
+            swap(buffer1, buffer2);
         }
         while (first_in_cycle != i);
     }
@@ -228,14 +344,14 @@ double* block_reallocate_matrix(double* data_ptr, const int& m_rows,
 
     // Learning
     sdr_vec_main = cycles_distribution_learning();
-    const int&& last_stripe_h = M_ROWS % B_ROWS;
+    const int last_stripe_h = M_ROWS % B_ROWS;
     if (last_stripe_h != 0)
     {
         sdr_vec_last_stripe = cycles_distribution_learning(last_stripe_h);
     }
-    
+    // double tt = omp_get_wtime();
     // Reallocation
-    const int&& stripe_size = B_ROWS * M_COLS;
+    const int stripe_size = B_ROWS * M_COLS;
     double* stripe_data_ptr = data_ptr;
     // Every iteration corresponds to the separate stripe
     for (int it = 0; it < M_ROWS / B_ROWS; ++it)
@@ -243,6 +359,8 @@ double* block_reallocate_matrix(double* data_ptr, const int& m_rows,
         reallocate_stripe(stripe_data_ptr, sdr_vec_main);
         stripe_data_ptr += stripe_size;
     }
+    // tt = omp_get_wtime() - tt;
+    // printf("\n REALLOCATION %f\n\n", tt);
 
     // Reallocation of last stripe elements,
     // if count of its rows is less than B_ROWS

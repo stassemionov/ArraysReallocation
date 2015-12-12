@@ -21,4 +21,8 @@ void print_to(ostream& ostr, const double* data_ptr, const int rows_count,
 // as measure of arrays difference
 double compare_arrays(const double* data1, const double* data2, const int len);
 
+// Binary Euclidean agorythm
+int gcd(const int u, const int v);
+
+
 #endif  // _SERVICE_H_
