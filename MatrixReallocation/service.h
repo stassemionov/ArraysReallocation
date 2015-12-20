@@ -2,8 +2,10 @@
 #define _SERVICE_H_
 
 #include <iostream>
+#include <vector>
 
 using std::ostream;
+using std::vector;
 
 // Generate M x N matrix. Elements are between lbound and ubound
 double* generate(double* data_ptr, const int rows_count, const int cols_count,
@@ -23,6 +25,10 @@ double compare_arrays(const double* data1, const double* data2, const int len);
 
 // Binary Euclidean agorythm
 int gcd(const int u, const int v);
+
+// Search 'val' in vector 'vec' with binary search,
+// return true or false
+bool m_find(const int& val, const vector<int>& vec);
 
 
 #endif  // _SERVICE_H_

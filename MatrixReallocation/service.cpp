@@ -4,8 +4,10 @@
 #include <ctime>
 #include <fstream>
 #include <iomanip>
+#include <vector>
 
 using std::setw;
+using std::vector;
 
 double* generate(double* data_ptr, const int rows_count, const int cols_count,
     const double lbound, const double ubound)
@@ -85,4 +87,33 @@ int gcd(const int u, const int v)
         return gcd((u - v) >> 1, v);
 
     return gcd((v - u) >> 1, u);
+}
+
+bool m_find(const int& val, const vector<int>& vec)
+{
+    if (vec.empty())
+    {
+        return false;
+    }
+    if (val > vec[vec.size() - 1])
+    {
+        return false;
+    }
+
+    int l = 0;
+    int r = static_cast<int>(vec.size()) - 1;
+    int m = 0;
+    while (l < r)
+    {
+        m = (l + r) / 2;
+        if (vec[m] < val)
+        {
+            l = m + 1;
+        }
+        else
+        {
+            r = m;
+        }
+    }
+    return vec[r] == val;
 }

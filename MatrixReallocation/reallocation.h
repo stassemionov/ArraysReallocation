@@ -1,16 +1,24 @@
 ﻿#ifndef _REALLOCATION_H_
 #define _REALLOCATION_H_
 
-// This function makes inplace reallocating of standard-layout matrix to
-// block representation by m x n blocks
-double* block_reallocate_matrix(double* data_ptr,
+// Inplace reallocating of standard-layout matrix to
+// block representation with b1 x b2 blocks.
+double* standard_to_block_layout_reallocation(double* data_ptr,
     const int& rows_count, const int& cols_count,
     const int& block_rows_count, const int& block_cols_count);
 
-// This function makes reallocating of standard-layout matrix to
-// block representation by m x n blocks using a buffer array
+// Reallocating of standard-layout matrix to
+// block representation with b1 x b2 blocks using a buffer array.
 double* get_reallocated(const double* data_ptr,
     const int& rows_count, const int& cols_count,
     const int& block_rows_count, const int& block_cols_count);
+
+// Inplace reallocating of standard-layout matrix to
+// double block representation with b1 x b2 main blocks
+// and db1 x db2 small blocks.
+double* standard_to_double_block_layout_reallocation(double* data_ptr,
+    const int& m_rows, const int& m_cols,
+    const int& b_rows, const int& b_cols,
+    const int& db_rows, const int& db_cols);
 
 #endif  // _REALLOCATION_H_
