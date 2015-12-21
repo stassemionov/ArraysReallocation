@@ -26,6 +26,16 @@ static int B_SIZE;             // площаль блока
 static int B_ROWS_SHIFT_SIZE;
 static int B_COLS_SHIFT_SIZE;
 
+// Сделать!
+// 1) Поубирать статические переменные и функции init_parameters, и вообще все статическое
+// 2) Повыносить инварианты из циклов в последней функции
+// 3) Сократить требования к памяти в основном алгоритме
+// 4) В основном алгоритме переделать аргументы функции reallocate_stripe
+// 5) В последней функции написать в комментариях размеры рассматриваемой подматрицы для каждого случая
+// 6) Сделать проверку для двойного блочного размещения
+// 7) Подумать, как сократить огромные промежутки при поиске нового цикла
+// 8) Найти индексную функцию для двойного блочного размещения и сделать алгоритм напрямую (а надо ???)
+
 static inline void init_parameters(const int& rows_count, const int& cols_count,
     const int& block_rows_count, const int& block_cols_count)
 {
@@ -34,8 +44,8 @@ static inline void init_parameters(const int& rows_count, const int& cols_count,
     B_ROWS = block_rows_count;
     B_COLS = block_cols_count;
 
-    M_BLOCK_ROWS = static_cast<int>(ceil((double)M_ROWS / B_ROWS));
-    M_BLOCK_COLS = static_cast<int>(ceil((double)M_COLS / B_COLS));
+    M_BLOCK_ROWS = static_cast<int>(ceil(1.0 * M_ROWS / B_ROWS));
+    M_BLOCK_COLS = static_cast<int>(ceil(1.0 * M_COLS / B_COLS));
     DIF_COLS = M_COLS % B_COLS;
     DIF_ROWS = M_ROWS % B_ROWS;
 
@@ -69,7 +79,7 @@ static inline int f_ind(const int& index)
     // координаты блока
     const int&& row_b = row_i / B_ROWS;
     const int&& col_b = col_i / B_COLS;
-    
+
     // номер блока
     // const int I = row_b * M_BLOCK_COLS + col_b;
     // координаты элемента в блоке
@@ -114,7 +124,7 @@ bool is_new_cycle(const int& index, vector<int>& help_vec)
 }
 
 vector<int> cycles_distribution_learning(
-    const int virtual_m,  const int virtual_n, 
+    const int virtual_m,  const int virtual_n,
     const int virtual_b1, const int virtual_b2)
 {
     // 'virtual_<...>' may be needed, when we want to get distribution
@@ -122,7 +132,7 @@ vector<int> cycles_distribution_learning(
     const int save_m = M_ROWS, save_n = M_COLS;
     const int save_b1 = B_ROWS, save_b2 = B_COLS;
     init_parameters(virtual_m, virtual_n, virtual_b1, virtual_b2);
-    
+
     // System of distinct representatives of cycles (SDR).
     vector<int> sdr_vec;
     // Additional cycles representatives for new cycles searching speed-up.
@@ -144,13 +154,13 @@ vector<int> cycles_distribution_learning(
     // Iterations starts with 'b2'-th element,
     // because first 'b2' elements don't need to be transfer.
     int i = B_COLS;
-    // i = B_ROWS*M_COLS - ((right_block_width == 0) ? 
+    // i = B_ROWS*M_COLS - ((right_block_width == 0) ?
     // B_COLS : right_block_width);
 
     // Defines frequency of additional cycles representatives insertion.
     // Requires O(b1) memory, because we have O(b1) cycles on average.
     const int insertion_step = ((B_ROWS*M_COLS >= 4 * B_ROWS) ?
-        ((B_ROWS*M_COLS) / (4 * B_ROWS)) : (1));
+        ((B_ROWS*M_COLS) / (4 * B_ROWS)) : B_ROWS);
     // This counter controls count of
     // additional cycles representatives insertion.
     int insert_counter = 0;
@@ -240,7 +250,8 @@ void reallocate_stripe(double* stripe_data, const vector<int>& sdr_vec,
     const int virtual_m,  const int virtual_n,
     const int virtual_b1, const int virtual_b2)
 {
-    if ( sdr_vec.empty() || (stripe_data == NULL) || (virtual_b1 == 0) || (virtual_b2 == 0) )
+    if ( sdr_vec.empty() || (stripe_data == NULL) ||
+        (virtual_b1 == 0) || (virtual_b2 == 0) )
     {
         return;
     }
@@ -286,8 +297,9 @@ void reallocate_stripe(double* stripe_data, const vector<int>& sdr_vec,
     init_parameters(save_m, save_n, save_b1, save_b2);
 }
 
-double* standard_to_block_layout_reallocation(double* data_ptr, const int& m_rows,
-    const int& m_cols, const int& b_rows, const int& b_cols)
+double* standard_to_block_layout_reallocation(double* data_ptr,
+    const int& m_rows, const int& m_cols,
+    const int& b_rows, const int& b_cols)
 {
     // For correct computation of index mapping function
     init_parameters(m_rows, m_cols, b_rows, b_cols);
@@ -299,7 +311,8 @@ double* standard_to_block_layout_reallocation(double* data_ptr, const int& m_row
     sdr_vec_main = cycles_distribution_learning(M_ROWS, M_COLS, B_ROWS, B_COLS);
     if (DIF_ROWS != 0)
     {
-        sdr_vec_last_stripe = cycles_distribution_learning(M_ROWS, M_COLS, DIF_ROWS, B_COLS);
+        sdr_vec_last_stripe = cycles_distribution_learning(
+            M_ROWS, M_COLS, DIF_ROWS, B_COLS);
     }
     // double tt = omp_get_wtime();
     // Reallocation
@@ -308,7 +321,7 @@ double* standard_to_block_layout_reallocation(double* data_ptr, const int& m_row
     // Every iteration corresponds to the separate stripe
     for (int it = 0; it < M_ROWS / B_ROWS; ++it)
     {
-        reallocate_stripe(stripe_data_ptr, sdr_vec_main, 
+        reallocate_stripe(stripe_data_ptr, sdr_vec_main,
             M_ROWS, M_COLS, B_ROWS, B_COLS);
         stripe_data_ptr += stripe_size;
     }
@@ -336,87 +349,106 @@ double* standard_to_double_block_layout_reallocation(double* data_ptr,
 
     // Secondly, every block must be reallocated locally
     // as well as whole matrix was reallocated just now.
- 
+
     // Learning for all cases...
     vector<int> sdr_main, sdr_right, sdr_bottom, sdr_corner;
-    vector<int> sdr_main_addit, sdr_right_addit, sdr_bottom_addit, sdr_corner_addit;
+    vector<int> sdr_main_addit, sdr_right_addit,
+        sdr_bottom_addit, sdr_corner_addit;
 
-    const int dif_rows_loc = b_rows % db_rows;
-    const int dif_cols_loc = b_cols % db_cols;
     const int dif_rows_glob = m_rows % b_rows;
     const int dif_cols_glob = m_cols % b_cols;
+    /*const int dif_rows_loc_main = b_rows % db_rows;
+    const int dif_rows_loc_bottom = dif_rows_glob % db_rows;
+    const int dif_cols_loc = b_cols % db_cols;*/
 
     // основная группа блоков (полноценные блоки)
     sdr_main = cycles_distribution_learning(b_rows, b_cols, db_rows, db_cols);
-    if (dif_rows_loc != 0)  // если локальная сетка некратна размеру основного блока
+    if (b_rows % db_rows != 0)  // если локальная сетка некратна размеру основного блока
     {
-        sdr_main_addit = cycles_distribution_learning(dif_rows_glob, b_cols, dif_rows_loc, db_cols);
+        sdr_main_addit = cycles_distribution_learning(
+            b_rows % db_rows, b_cols, b_rows % db_rows, db_cols);
     }
 
     // группа нижних неполных блоков (усечены снизу)
-    if (dif_rows_glob != 0) // если глобальная сетка некратна размеру матрицы по столбцам
+    if (dif_rows_glob != 0)  // если глобальная сетка некратна размеру матрицы по столбцам
     {
-        const int loc_block_height = (dif_rows_loc >= db_rows) ? db_rows : dif_rows_loc;
-        sdr_bottom = cycles_distribution_learning(dif_rows_glob, b_cols, loc_block_height, db_cols);
-        if (dif_rows_glob % loc_block_height != 0)
+        const int loc_block_height = (dif_rows_glob >= db_rows) ? db_rows : dif_rows_glob;
+        sdr_bottom = cycles_distribution_learning(
+            dif_rows_glob, b_cols, loc_block_height, db_cols);
+        const int dif_rows_loc = dif_rows_glob % loc_block_height;
+        if (dif_rows_loc != 0)  // если локальная сетка некратна размеру нижнего неполного блока
         {
-            sdr_bottom_addit = cycles_distribution_learning(dif_rows_glob, b_cols, dif_rows_glob % loc_block_height, db_cols);
+            const int db1_bottom = (dif_rows_loc >= db_rows) ? db_rows : dif_rows_loc;
+            sdr_bottom_addit = cycles_distribution_learning(
+                dif_rows_loc, b_cols, db1_bottom, db_cols);
         }
     }
 
     // группа правых неполных блоков (усечены справа)
     if (dif_cols_glob != 0) // если глобальная сетка некратна размеру матрицы по строкам
     {
-        const int loc_block_width = (dif_cols_loc >= db_cols) ? db_cols : dif_cols_loc;
-        sdr_right = cycles_distribution_learning(b_rows, dif_cols_glob, db_rows, loc_block_width);
-        if (dif_rows_loc != 0)
+        const int loc_block_width = (dif_cols_glob >= db_cols) ? db_cols : dif_cols_glob;
+        sdr_right = cycles_distribution_learning(
+            b_rows, dif_cols_glob, db_rows, loc_block_width);
+        const int dif_rows_loc = b_rows % db_rows;
+        if (dif_rows_loc != 0)  // если локальная сетка некратна размеру правого неполного блока
         {
-            sdr_right_addit = cycles_distribution_learning(b_rows, dif_cols_glob, dif_rows_loc, loc_block_width);
+            const int db1_bottom = (dif_rows_loc >= db_rows) ? db_rows : dif_rows_loc;
+            sdr_right_addit = cycles_distribution_learning(
+                dif_rows_loc, dif_cols_glob, db1_bottom, loc_block_width);
         }
     }
 
     // угловой блок (усечен справа и снизу)
     if ((dif_rows_glob != 0) && (dif_cols_glob != 0))   // если глобальная сетка некратна размеру матрицы ни по строкам, ни по столбцам
     {
-        const int loc_block_height = (dif_rows_loc >= db_rows) ? db_rows : dif_rows_loc;
-        const int loc_block_width  = (dif_cols_loc >= db_cols) ? db_cols : dif_cols_loc;
-        sdr_corner = cycles_distribution_learning(dif_rows_glob, dif_cols_glob, loc_block_height, loc_block_width);
-        if (dif_rows_glob % loc_block_height != 0)
+        const int loc_block_height = (dif_rows_glob >= db_rows) ? db_rows : dif_rows_glob;
+        const int loc_block_width  = (dif_cols_glob >= db_cols) ? db_cols : dif_cols_glob;
+        sdr_corner = cycles_distribution_learning(
+            dif_rows_glob, dif_cols_glob, loc_block_height, loc_block_width);
+        const int dif_rows_loc = dif_rows_glob % loc_block_height;
+        if (dif_rows_loc != 0)
         {
-            sdr_corner_addit = cycles_distribution_learning(dif_rows_glob, dif_cols_glob, dif_rows_glob % loc_block_height, loc_block_width);
+            const int db1_bottom = (dif_rows_loc >= db_rows) ? db_rows : dif_rows_loc;
+            sdr_corner_addit = cycles_distribution_learning(
+                dif_rows_loc, dif_cols_glob, db1_bottom, loc_block_width);
         }
     }
-    
+    // ... end of learning.
+
     // Reallocation ...
-    const int block_rows_count = static_cast<int>(ceil(m_rows / b_rows));
-    const int block_cols_count = static_cast<int>(ceil(m_cols / b_cols));
+    const int block_rows_count = static_cast<int>(ceil(1.0 * m_rows / b_rows));
+    const int block_cols_count = static_cast<int>(ceil(1.0 * m_cols / b_cols));
 
     for (int ib = 0; ib < block_rows_count; ++ib)
     {
         const int b1  = ((dif_rows_glob != 0) && (ib == block_rows_count - 1)) ? dif_rows_glob : b_rows;
-        const int db1 = ((dif_rows_glob != 0) && (dif_rows_glob < db_rows) && (ib == block_rows_count - 1)) ? dif_rows_glob : db_rows;
+        const int db1 = ((dif_rows_glob != 0) && (ib == block_rows_count - 1) && (dif_rows_glob < db_rows)) ? dif_rows_glob : db_rows;
 
         for (int jb = 0; jb < block_cols_count; ++jb)
         {            
             const int b2  = ((dif_cols_glob != 0) && (jb == block_cols_count - 1)) ? dif_cols_glob : b_cols;
-            const int db2 = ((dif_cols_glob != 0) && (dif_cols_glob < db_cols) && (jb == block_cols_count - 1)) ? dif_cols_glob : db_cols;
-            const int stripe_size = db1 * b2;
+            const int db2 = ((dif_cols_glob != 0) && (jb == block_cols_count - 1) && (dif_cols_glob < db_cols)) ? dif_cols_glob : db_cols;
+            const int loc_stripe_size = db1 * b2;
 
+            // Cycles distribution for main part of block, which is being reallocated
             vector<int>& sdr_vec = ((ib == block_rows_count - 1) && (dif_rows_glob != 0)) ?
                 (((jb == block_cols_count - 1) && (dif_cols_glob != 0)) ? sdr_corner : sdr_bottom) :
                 (((jb == block_cols_count - 1) && (dif_cols_glob != 0)) ? sdr_right  : sdr_main);
 
+            // Cycles distribution for bottom part of block, which is being reallocated.
+            // This part is caused by inconsistency between block size and mesh of small blocks
             vector<int>& sdr_vec_addit = ((ib == block_rows_count - 1) && (dif_rows_glob != 0)) ?
                 (((jb == block_cols_count - 1) && (dif_cols_glob != 0)) ? sdr_corner_addit : sdr_bottom_addit) :
                 (((jb != block_cols_count - 1) && (dif_cols_glob != 0)) ? sdr_right_addit  : sdr_main_addit);
 
             // указатель на начало блока
             double* stripe_data_ptr = data_ptr + ib*b_rows*m_cols + jb*b1*b_cols;
-            
+
             for (int it = 0; it < b1 / db1; ++it)
             {
                 reallocate_stripe(stripe_data_ptr, sdr_vec, b1, b2, db1, db2);
-                stripe_data_ptr += stripe_size;
+                stripe_data_ptr += loc_stripe_size;
             }
             reallocate_stripe(stripe_data_ptr, sdr_vec_addit, b1, b2, b1 % db1, db2);
         }
