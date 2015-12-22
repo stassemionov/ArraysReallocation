@@ -46,7 +46,7 @@ int main()
 
     ostr << "Вычисление эталона...     ";
     time_ = omp_get_wtime();
-    double* dt = get_reallocated(data, N1, N2, b1, b2);
+    double* dt = standard_to_block_layout_reallocation_buf(data, N1, N2, b1, b2);
     time_ = omp_get_wtime() - time_;
     ostr << time_ << " секунд\n";
 //  print_to(ostr, dt, N1, N2, 4);
@@ -61,6 +61,14 @@ int main()
     ostr << "Норма разности: ";
     ostr << compare_arrays(dt, data, N1*N2) << "\n\n";
 
+    ostr << "Вычисление эталона...     ";
+    time_ = omp_get_wtime();
+    double* ddt = standard_to_double_block_layout_reallocation_buf(
+        data_copy, N1, N2, b1, b2, db1, db2);
+    time_ = omp_get_wtime() - time_;
+    ostr << time_ << " секунд\n";
+//  print_to(ostr, ddt, N1, N2, 4);
+
     ostr << "Двойное блочное переразмещение... ";
     time_ = omp_get_wtime();
     standard_to_double_block_layout_reallocation(data_copy,
@@ -68,4 +76,7 @@ int main()
     time_ = omp_get_wtime() - time_;
     ostr << time_ << " секунд\n\n";
 //  print_to(ostr, data_copy, N1, N2, 4);
+
+    ostr << "Норма разности: ";
+    ostr << compare_arrays(ddt, data_copy, N1*N2) << "\n\n";
 }

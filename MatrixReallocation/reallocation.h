@@ -9,9 +9,18 @@ double* standard_to_block_layout_reallocation(double* data_ptr,
 
 // Reallocating of standard-layout matrix to
 // block representation with b1 x b2 blocks using a buffer array.
-double* get_reallocated(const double* data_ptr,
+double* standard_to_block_layout_reallocation_buf(const double* data_ptr,
     const int& rows_count, const int& cols_count,
     const int& block_rows_count, const int& block_cols_count);
+
+// Reallocating of standard-layout matrix to
+// double block representation with b1 x b2 main blocks
+// and d1 x d2 subblocks, using a buffer array.
+double* standard_to_double_block_layout_reallocation_buf(
+    const double* data_ptr,
+    const int& rows_count, const int& cols_count,
+    const int& block_rows_count, const int& block_cols_count,
+    const int& d_block_rows_count, const int& d_block_cols_count);
 
 // Inplace reallocating of standard-layout matrix to
 // double block representation with b1 x b2 main blocks
