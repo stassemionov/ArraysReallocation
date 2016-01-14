@@ -33,6 +33,8 @@ int main()
     ostr << "db1 = " << db1 << "\n";
     ostr << "db2 = " << db2 << "\n\n";
 
+    TaskData parameters = makeData(N1, N2, b1, b2, db1, db2);
+
     double* data = new double[N1*N2];
     ostr << "Заполнение массива...     ";
     double time_ = omp_get_wtime();
@@ -46,14 +48,14 @@ int main()
 
     ostr << "Вычисление эталона...     ";
     time_ = omp_get_wtime();
-    double* dt = standard_to_block_layout_reallocation_buf(data, N1, N2, b1, b2);
+    double* dt = standard_to_block_layout_reallocation_buf(data, parameters);
     time_ = omp_get_wtime() - time_;
     ostr << time_ << " секунд\n";
 //  print_to(ostr, dt, N1, N2, 4);
 
     ostr << "Блочное переразмещение... ";
     time_ = omp_get_wtime();
-    standard_to_block_layout_reallocation(data, N1, N2, b1, b2);
+    standard_to_block_layout_reallocation(data, parameters);
     time_ = omp_get_wtime() - time_;
     ostr << time_ << " секунд\n\n";
 //  print_to(ostr, data, N1, N2, 4);
@@ -64,15 +66,14 @@ int main()
     ostr << "Вычисление эталона...     ";
     time_ = omp_get_wtime();
     double* ddt = standard_to_double_block_layout_reallocation_buf(
-        data_copy, N1, N2, b1, b2, db1, db2);
+        data_copy, parameters);
     time_ = omp_get_wtime() - time_;
     ostr << time_ << " секунд\n";
 //  print_to(ostr, ddt, N1, N2, 4);
 
     ostr << "Двойное блочное переразмещение... ";
     time_ = omp_get_wtime();
-    standard_to_double_block_layout_reallocation(data_copy,
-        N1, N2, b1, b2, db1, db2);
+    standard_to_double_block_layout_reallocation(data_copy, parameters);
     time_ = omp_get_wtime() - time_;
     ostr << time_ << " секунд\n\n";
 //  print_to(ostr, data_copy, N1, N2, 4);
