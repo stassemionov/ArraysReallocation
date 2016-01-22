@@ -151,10 +151,12 @@
     <ClCompile Include="main.cpp" />
     <ClCompile Include="reallocation.cpp" />
     <ClCompile Include="service.cpp" />
+    <ClCompile Include="taskdata.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="reallocation.h" />
     <ClInclude Include="service.h" />
+    <ClInclude Include="taskdata.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

@@ -1,10 +1,6 @@
 ﻿#include "service.h"
 
-#include <cstdlib>
-#include <ctime>
-#include <fstream>
 #include <iomanip>
-#include <vector>
 
 using std::setw;
 using std::vector;
@@ -95,7 +91,11 @@ bool m_find(const int& val, const vector<int>& vec)
     {
         return false;
     }
-    if (val > vec[vec.size() - 1])
+    if (val > vec.back())
+    {
+        return false;
+    }
+    if (val < vec.front())
     {
         return false;
     }

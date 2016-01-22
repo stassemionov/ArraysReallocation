@@ -1,10 +1,9 @@
-﻿#include <cstdlib>
+﻿#include "reallocation.h"
+#include "service.h"
+
 #include <fstream>
 
 #include "omp.h"
-
-#include "reallocation.h"
-#include "service.h"
 
 using std::cout;
 using std::ifstream;
@@ -33,7 +32,8 @@ int main()
     ostr << "db1 = " << db1 << "\n";
     ostr << "db2 = " << db2 << "\n\n";
 
-    TaskData parameters = makeData(N1, N2, b1, b2, db1, db2);
+    TaskClass parameters;
+    parameters.makeData(N1, N2, b1, b2, db1, db2);
 
     double* data = new double[N1*N2];
     ostr << "Заполнение массива...     ";

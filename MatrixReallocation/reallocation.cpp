@@ -1,11 +1,8 @@
 ﻿#include "reallocation.h"
-
-#include <cstdlib>
-#include <cmath>
-#include <vector>
-#include <algorithm>
-
 #include "service.h"
+
+#include <cmath>
+#include <algorithm>
 
 // #include "omp.h"
 
@@ -14,184 +11,67 @@ using std::sort;
 using std::swap;
 
 // Сделать!
-// 1) Повыносить инварианты из циклов в последней функции и внутри индексной функции
-// 2) Сократить требования к памяти в основном алгоритме
-// 3) В последней функции написать в комментариях размеры рассматриваемой подматрицы для каждого случая
-// 4) Подумать, как сократить огромные промежутки при поиске нового цикла
-// 5) Сделать алгоритм двойного блочного размещения напрямую (а надо ??? : перемещений меньше, но обучение сложнее)
-
-TaskData makeData(const int& rows_count, const int& cols_count,
-    const int& block_rows_count, const int& block_cols_count,
-    const int& double_block_rows_count,
-    const int& double_block_cols_count)
-{
-    TaskData data;
-
-    data.M_ROWS = rows_count;
-    data.M_COLS = cols_count;
-    data.B_ROWS = block_rows_count;
-    data.B_COLS = block_cols_count;
-    data.D_ROWS = double_block_rows_count;
-    data.D_COLS = double_block_cols_count;
-
-    data.M_BLOCK_ROWS = static_cast<int>(ceil(1.0 * data.M_ROWS / data.B_ROWS));
-    data.M_BLOCK_COLS = static_cast<int>(ceil(1.0 * data.M_COLS / data.B_COLS));
-    data.DIF_COLS = data.M_COLS % data.B_COLS;
-    data.DIF_ROWS = data.M_ROWS % data.B_ROWS;
-
-    return data;
-}
-
-inline int f_ind_double(const int& i_index,
-                        const int& j_index,
-                        const TaskData& data)
-{    
-    const int&& b_row = i_index / data.B_ROWS;
-    const int&& b_col = j_index / data.B_COLS;
-    
-    // реальные размеры текущего блока
-    const int& bm = (b_row == data.M_BLOCK_ROWS - 1) ?
-        ((data.DIF_ROWS != 0) ? data.DIF_ROWS : data.B_ROWS) : data.B_ROWS;
-    const int& bn = (b_col == data.M_BLOCK_COLS - 1) ?
-        ((data.DIF_COLS != 0) ? data.DIF_COLS : data.B_COLS) : data.B_COLS;
-
-    // смещение относительно больших блоков
-    const int&& b_shift = b_row * data.B_ROWS * data.M_COLS +
-                          bm * data.B_COLS * b_col;
-
-    // реальные размеры маленьких блоков
-    const int& db1 = (bm < data.D_ROWS) ? bm : data.D_ROWS;  
-    const int& db2 = (bn < data.D_COLS) ? bn : data.D_COLS;
-
-    const int&& d_row_count = static_cast<int>(ceil(1.0 * bm / db1));
-    const int&& d_col_count = static_cast<int>(ceil(1.0 * bn / db2));
-
-    // координаты элемента относительно большого блока, в котором он находится
-    const int&& b_loc_i = i_index - b_row * data.B_ROWS;
-    const int&& b_loc_j = j_index - b_col * data.B_COLS;
-
-    // координаты малого блока относительно большого, в котором он находится
-    const int&& d_row = b_loc_i / db1;
-    const int&& d_col = b_loc_j / db2;
-
-    const int& current_small_block_h = (d_row == d_row_count - 1) ?
-        ((bm % db1 != 0) ? bm % db1 : db1) : db1;
-    const int& current_small_block_w = (d_col == d_col_count - 1) ?
-        ((bn % db2 != 0) ? bn % db2 : db2) : db2;
-
-    const int&& d_shift = d_row * db1 * bn + d_col * current_small_block_h * db2;
-
-    // смещение внутри малого блока
-    const int&& d_loc_i = b_loc_i - d_row * db1;
-    const int&& d_loc_j = b_loc_j - d_col * db2;
-    const int&& loc_shift = d_loc_i * current_small_block_w + d_loc_j;
-    
-    return b_shift + d_shift + loc_shift;
-}
-
-static inline int f_ind(const int& index, const TaskData& data)
-{
-    const int&& index_i = index / data.M_COLS;
-    const int&& index_j = index % data.M_COLS;
-
-    const int&& block_i = index_i / data.B_ROWS;
-    const int&& block_j = index_j / data.B_COLS;
-        
-    // Реальные размеры текущего блока
-    const int& bm = (block_i == data.M_BLOCK_ROWS - 1) ?
-        ((data.DIF_ROWS != 0) ? data.DIF_ROWS : data.B_ROWS) : data.B_ROWS;
-    const int& bn = (block_j == data.M_BLOCK_COLS - 1) ?
-        ((data.DIF_COLS != 0) ? data.DIF_COLS : data.B_COLS) : data.B_COLS;
-
-    int&& block_shift = block_i * data.B_ROWS * data.M_COLS +
-                        block_j * bm * data.B_COLS;
-    int&& loc_shift = bn * (index_i - block_i * data.B_ROWS) +
-                      index_j - block_j * data.B_COLS;
-
-    return block_shift + loc_shift;
-    
-    /*
-    const int&& row_i = index / M_COLS;
-    const int&& col_i = index % M_COLS;
-
-    // координаты блока
-    const int&& row_b = row_i / B_ROWS;
-    const int&& col_b = col_i / B_COLS;
-
-    // номер блока
-    // const int I = row_b * M_BLOCK_COLS + col_b;
-    // координаты элемента в блоке
-    // int row_i_loc = row_i % b1;
-    // int col_i_loc = col_i % b2;
-
-    const int&& shift = ((col_b == M_BLOCK_COLS - 1) && (DIF_COLS != 0)) ?
-        (row_i % B_ROWS) * DIF_COLS + (col_i % B_COLS) :
-        (row_i % B_ROWS) * B_COLS + (col_i % B_COLS);
-
-    // Для нижних блоков нужно вычислить смещение
-    // границы сетки от границы матрицы, если оно есть
-    if ((row_b == M_BLOCK_ROWS - 1) && (DIF_ROWS != 0))
-    {
-        return (row_b * M_BLOCK_COLS + col_b)*B_SIZE + shift
-            - row_b*B_COLS_SHIFT_SIZE - col_b*B_ROWS_SHIFT_SIZE;
-    }
-    else
-    {
-        return (row_b * M_BLOCK_COLS + col_b)*B_SIZE + shift
-            - row_b*B_COLS_SHIFT_SIZE;
-    }*/
-}
+// 1) Сократить требования к памяти в основном алгоритме
+// 2) В последней функции написать в комментариях размеры рассматриваемой подматрицы для каждого случая
+// 3) Подумать, как сократить огромные промежутки при поиске нового цикла
 
 double* standard_to_block_layout_reallocation_buf(const double* data_ptr,
-    const TaskData& data)
+    const TaskClass& task_info)
 {
+    const TaskData& data = task_info.getDataRef();
+
     const int blocks_count_in_col = static_cast<int>(ceil(1.0 * data.M_ROWS / data.B_ROWS));
     const int blocks_count_in_row = static_cast<int>(ceil(1.0 * data.M_COLS / data.B_COLS));
     
     double* result = new double[data.M_ROWS * data.M_COLS];
     for (int i = 0; i < data.M_ROWS * data.M_COLS; ++i)
     {
-        result[f_ind(i,data)] = data_ptr[i];
+        result[task_info.indexFunction(i)] = data_ptr[i];
     }
     return result;
 }
 
-
 double* standard_to_double_block_layout_reallocation_buf(
-    const double* data_ptr, const TaskData& data)
+    const double* data_ptr, const TaskClass& task_info)
 {
+    const TaskData& data = task_info.getDataRef();
+
     double* result = new double[data.M_ROWS * data.M_COLS];
     for (int i = 0; i < data.M_ROWS; ++i)
     {
+        const double* row_ptr = data_ptr + i * data.M_COLS;
         for (int j = 0; j < data.M_COLS; ++j)
         {
-            result[f_ind_double(i,j,data)] = data_ptr[i*data.M_COLS+j];
+            result[task_info.indexFunctionDbl(i,j)] = row_ptr[j];
         }
     }
     return result;
 }
 
-bool is_new_cycle(const int& index, const TaskData& data, vector<int>& help_vec)
+// Проверка, является ли цикл, содержащий индекс index,
+// новым по отношению к циклам, порожденым множеством индексов 'help_vec'
+static inline bool is_new_cycle(const int& index,
+                                const TaskClass& task_info,
+                                const vector<int>& help_vec)
 {
     int next = index;
-    vector<int> hv;
-    int k = 1;
-    size_t size = help_vec.size();
     do
     {
         if (m_find(next, help_vec))
         {
             return false;
         }
-        next = f_ind(next, data);
+        next = task_info.indexFunction(next);
     }
     while (next != index);
 
     return true;
 }
 
-vector<int> cycles_distribution_learning(const TaskData& data)
+vector<int> cycles_distribution_learning(const TaskClass& task_info)
 {
+    const TaskData& data = task_info.getDataRef();
+
     // System of distinct representatives of cycles (SDR).
     vector<int> sdr_vec;
     // Additional cycles representatives for new cycles searching speed-up.
@@ -230,13 +110,14 @@ vector<int> cycles_distribution_learning(const TaskData& data)
         // Do until cycle beginning isn't reached
         // (first element of current pass)
         int length = 0;
+        int inserted = 0;
         int min_index = data.M_COLS * data.B_ROWS;
         int max_index = 0;
         const int first = i;
         do
         {
             // go to next position in this cycle
-            i = f_ind(i, data);
+            i = task_info.indexFunction(i);
 
             // Statistics collecting...
             if (min_index > i)
@@ -259,22 +140,25 @@ vector<int> cycles_distribution_learning(const TaskData& data)
             // Insertion additional indices
             if ((++insert_counter) % insertion_step == 0)
             {
-                if (!m_find(i, help_vec))
-                {
-                    help_vec.push_back(i);
-                    sort(help_vec.begin(), help_vec.end());
-                }
+                help_vec.push_back(i);
+                ++inserted;
             }
         }
         while (i != first);
 
-        // We don't need to collect indices of cycles of 1 element
+        // Sort for binary search.
+        if (inserted > 0)
+        {
+            sort(help_vec.begin(), help_vec.end());
+        }
+
+        // We don't need to collect indices of cycles with 1 element
         if (length > 1)
         {
             sdr_vec.push_back(min_index);
             if (!m_find(i, help_vec))
             {
-                help_vec.push_back(i);
+                help_vec.push_back(min_index);
                 sort(help_vec.begin(), help_vec.end());
             }
             // printf("\nMIN = %d \nMAX = %d\nLEN = %d\n",
@@ -288,7 +172,7 @@ vector<int> cycles_distribution_learning(const TaskData& data)
             {
                 next_cycle_begining += step;
             }
-            while (!is_new_cycle(next_cycle_begining, data, help_vec));
+            while (!is_new_cycle(next_cycle_begining, task_info, help_vec));
             i = next_cycle_begining;
         }
     }
@@ -301,9 +185,11 @@ vector<int> cycles_distribution_learning(const TaskData& data)
 }
 
 void reallocate_stripe(double* stripe_data,
-                       const TaskData& data,
+                       const TaskClass& task_info,
                        const vector<int>& sdr_vec)
 {
+    const TaskData& data = task_info.getDataRef();
+
     if (sdr_vec.empty() || (stripe_data == NULL) ||
         (data.B_ROWS == 0) || (data.B_COLS == 0))
     {
@@ -329,7 +215,7 @@ void reallocate_stripe(double* stripe_data,
         // Do until cycle beginning isn't reached
         do
         {
-            i = f_ind(i, data);
+            i = task_info.indexFunction(i);
             loc_data_ptr = stripe_data + i;
 
             memcpy(buffer2, loc_data_ptr, len);
@@ -343,20 +229,22 @@ void reallocate_stripe(double* stripe_data,
 }
 
 double* standard_to_block_layout_reallocation(double* data_ptr,
-                                              const TaskData& data)
+                                              const TaskClass& task_info)
 {
+    const TaskData& data = task_info.getDataRef();
+
     // Systems of distinct representatives for different cycles
     vector<int> sdr_vec_main, sdr_vec_last_stripe;
 
     // Learning
-    sdr_vec_main = cycles_distribution_learning(data);
+    sdr_vec_main = cycles_distribution_learning(task_info);
 
-    TaskData subtask_data;
+    TaskClass subtask_info;
     if (data.DIF_ROWS != 0)
     {
-        subtask_data = makeData(data.M_ROWS, data.M_COLS, 
-                                data.DIF_ROWS, data.B_COLS);
-        sdr_vec_last_stripe = cycles_distribution_learning(subtask_data);
+        subtask_info.makeData(data.M_ROWS, data.M_COLS, 
+                              data.DIF_ROWS, data.B_COLS);
+        sdr_vec_last_stripe = cycles_distribution_learning(subtask_info);
     }
     // double tt = omp_get_wtime();
     // Reallocation
@@ -365,7 +253,7 @@ double* standard_to_block_layout_reallocation(double* data_ptr,
     // Every iteration corresponds to the separate stripe
     for (int it = 0; it < data.M_ROWS / data.B_ROWS; ++it)
     {
-        reallocate_stripe(stripe_data_ptr, data, sdr_vec_main);
+        reallocate_stripe(stripe_data_ptr, task_info, sdr_vec_main);
         stripe_data_ptr += stripe_size;
     }
     // tt = omp_get_wtime() - tt;
@@ -375,20 +263,22 @@ double* standard_to_block_layout_reallocation(double* data_ptr,
     // if count of its rows is less than B_ROWS
     // (in this case, cycles destribution in last stripe and
     // in main part of array isn't the same).
-    reallocate_stripe(stripe_data_ptr, subtask_data, sdr_vec_last_stripe);
+    reallocate_stripe(stripe_data_ptr, subtask_info, sdr_vec_last_stripe);
 
     return data_ptr;
 }
 
 
 double* standard_to_double_block_layout_reallocation(double* data_ptr,
-                                                     const TaskData& data)
+                                                     const TaskClass& task_info)
 {
     // Firstly, make block reallocation
-    standard_to_block_layout_reallocation(data_ptr, data);
+    standard_to_block_layout_reallocation(data_ptr, task_info);
 
     // Secondly, every block must be reallocated locally
     // as well as whole matrix was reallocated just now.
+
+    const TaskData& data = task_info.getDataRef();
 
     // Learning for all cases...
     vector<int> sdr_main, sdr_right, sdr_bottom, sdr_corner;
@@ -396,64 +286,99 @@ double* standard_to_double_block_layout_reallocation(double* data_ptr,
                 sdr_bottom_addit, sdr_corner_addit;
     
     // Task parameters for different learning cases.
-    TaskData main_data, main_data_addit, 
-             bottom_data, bottom_data_addit, 
-             right_data, right_data_addit, 
-             corner_data, corner_data_addit;
+    TaskClass main_data, main_data_addit, 
+              bottom_data, bottom_data_addit, 
+              right_data, right_data_addit, 
+              corner_data, corner_data_addit;
 
-    // основная группа блоков (полноценные блоки)
-    main_data = makeData(data.B_ROWS, data.B_COLS, data.D_ROWS, data.D_COLS);
+    // Learning for different relationships of small and big blocks is produced below.
+    // Two main cases are highlighted:
+    // 1. Learning of small blocks distribution in main part of big block.
+    // 2. Learning of small blocks distribution in truncated part of big block.
+    // Big block is b1 x b2 block that can be truncated 
+    // on right and/or bottom side, when there is no multiplicity
+    // of matrix size and block size.
+    // Truncated part is part of big block, which is defined by remainder of
+    // division big block size by small block size.
+    // Main part is part of big block, which is defined by
+    // cutting truncated part off from big block.
+
+    // Learning for main group of big blocks (consists of complete blocks)
+    main_data.makeData(data.B_ROWS, data.B_COLS, data.D_ROWS, data.D_COLS);
     sdr_main = cycles_distribution_learning(main_data);
-    if (data.B_ROWS % data.D_ROWS != 0)  // если локальная сетка некратна размеру основного блока
+    const int loc_rows_shift = data.B_ROWS % data.D_ROWS;
+    // If there is no multiplicity of big and small blocks sizes
+    if (loc_rows_shift != 0)
     {
-        const int dif_rows_loc = (data.B_ROWS % data.D_ROWS >= data.D_ROWS) ? data.D_ROWS : data.B_ROWS % data.D_ROWS;
-        main_data_addit = makeData(dif_rows_loc, data.B_COLS, dif_rows_loc, data.D_COLS);
+        const int dif_rows_loc = (loc_rows_shift >= data.D_ROWS) ? 
+                                  data.D_ROWS : loc_rows_shift;
+        main_data_addit.makeData(dif_rows_loc, data.B_COLS,
+                                 dif_rows_loc, data.D_COLS);
         sdr_main_addit = cycles_distribution_learning(main_data_addit);
     }
 
-    // группа нижних неполных блоков (усечены снизу)
+    // Learning for bottom group of big blocks
+    // (consists of blocks, which is truncated on bottom side)
     if (data.DIF_ROWS != 0)  // если глобальная сетка некратна размеру матрицы по столбцам
     {
-        const int loc_block_height = (data.DIF_ROWS >= data.D_ROWS) ? data.D_ROWS : data.DIF_ROWS;
-        bottom_data = makeData(data.DIF_ROWS, data.B_COLS, loc_block_height, data.D_COLS);
+        const int loc_block_height = (data.DIF_ROWS >= data.D_ROWS) ?
+                                      data.D_ROWS : data.DIF_ROWS;
+        bottom_data.makeData(data.DIF_ROWS, data.B_COLS,
+                             loc_block_height, data.D_COLS);
         sdr_bottom = cycles_distribution_learning(bottom_data);
 
         const int dif_rows_loc = data.DIF_ROWS % loc_block_height;
-        if (dif_rows_loc != 0)  // если локальная сетка некратна размеру нижнего неполного блока
+        // If there is no multiplicity of bottom big and small block size
+        if (dif_rows_loc != 0)
         {
-            const int db1_bottom = (dif_rows_loc >= data.D_ROWS) ? data.D_ROWS : dif_rows_loc;
-            bottom_data_addit = makeData(dif_rows_loc, data.B_COLS, db1_bottom, data.D_COLS);
+            const int db1_bottom = (dif_rows_loc >= data.D_ROWS) ?
+                                    data.D_ROWS : dif_rows_loc;
+            bottom_data_addit.makeData(dif_rows_loc, data.B_COLS,
+                                       db1_bottom, data.D_COLS);
             sdr_bottom_addit = cycles_distribution_learning(bottom_data_addit);
         }
     }
-
-    // группа правых неполных блоков (усечены справа)
+    
+    // Learning for right group of big blocks
+    // (consists of blocks, which is truncated on right side)
     if (data.DIF_COLS != 0) // если глобальная сетка некратна размеру матрицы по строкам
     {
-        const int loc_block_width = (data.DIF_COLS >= data.D_COLS) ? data.D_COLS : data.DIF_COLS;
-        right_data = makeData(data.B_ROWS, data.DIF_COLS, data.D_ROWS, loc_block_width);
+        const int loc_block_width = (data.DIF_COLS >= data.D_COLS) ?
+                                     data.D_COLS : data.DIF_COLS;
+        right_data.makeData(data.B_ROWS, data.DIF_COLS,
+                            data.D_ROWS, loc_block_width);
         sdr_right = cycles_distribution_learning(right_data);
-        const int dif_rows_loc = data.B_ROWS % data.D_ROWS;
-        if (dif_rows_loc != 0)  // если локальная сетка некратна размеру правого неполного блока
+        const int dif_rows_loc = loc_rows_shift;
+        // If there is no multiplicity of right big and small block size
+        if (dif_rows_loc != 0)
         {
-            const int db1_bottom = (dif_rows_loc >= data.D_ROWS) ? data.D_ROWS : dif_rows_loc;
-            right_data_addit = makeData(dif_rows_loc, data.DIF_COLS, db1_bottom, loc_block_width);
+            const int db1_bottom = (dif_rows_loc >= data.D_ROWS) ?
+                                    data.D_ROWS : dif_rows_loc;
+            right_data_addit.makeData(dif_rows_loc, data.DIF_COLS,
+                                      db1_bottom, loc_block_width);
             sdr_right_addit = cycles_distribution_learning(right_data_addit);
         }
     }
 
-    // угловой блок (усечен справа и снизу)
-    if ((data.DIF_ROWS != 0) && (data.DIF_COLS != 0))   // если глобальная сетка некратна размеру матрицы ни по строкам, ни по столбцам
+    // Learning for corner big block 
+    // (this block can be truncated on right and bottom side)
+    if ((data.DIF_ROWS != 0) && (data.DIF_COLS != 0))
     {
-        const int loc_block_height = (data.DIF_ROWS >= data.D_ROWS) ? data.D_ROWS : data.DIF_ROWS;
-        const int loc_block_width  = (data.DIF_COLS >= data.D_COLS) ? data.D_COLS : data.DIF_COLS;
-        corner_data = makeData(data.DIF_ROWS, data.DIF_COLS, loc_block_height, loc_block_width);
+        const int loc_block_height = (data.DIF_ROWS >= data.D_ROWS) ?
+                                      data.D_ROWS : data.DIF_ROWS;
+        const int loc_block_width  = (data.DIF_COLS >= data.D_COLS) ?
+                                      data.D_COLS : data.DIF_COLS;
+        corner_data.makeData(data.DIF_ROWS, data.DIF_COLS,
+                             loc_block_height, loc_block_width);
         sdr_corner = cycles_distribution_learning(corner_data);
         const int dif_rows_loc = data.DIF_ROWS % loc_block_height;
+        // If there is no multiplicity of corner big and small block size
         if (dif_rows_loc != 0)
         {
-            const int db1_bottom = (dif_rows_loc >= data.D_ROWS) ? data.D_ROWS : dif_rows_loc;
-            corner_data_addit = makeData(dif_rows_loc, data.DIF_COLS, db1_bottom, loc_block_width);
+            const int db1_bottom = (dif_rows_loc >= data.D_ROWS) ? 
+                                    data.D_ROWS : dif_rows_loc;
+            corner_data_addit.makeData(dif_rows_loc, data.DIF_COLS,
+                                       db1_bottom, loc_block_width);
             sdr_corner_addit = cycles_distribution_learning(corner_data_addit);
         }
     }
@@ -462,42 +387,84 @@ double* standard_to_double_block_layout_reallocation(double* data_ptr,
     // Reallocation ...
     for (int ib = 0; ib < data.M_BLOCK_ROWS; ++ib)
     {
-        const int b1  = ((data.DIF_ROWS != 0) && (ib == data.M_BLOCK_ROWS - 1)) ? data.DIF_ROWS : data.B_ROWS;
-        const int db1 = ((data.DIF_ROWS != 0) && (ib == data.M_BLOCK_ROWS - 1) && (data.DIF_ROWS < data.D_ROWS)) ? data.DIF_ROWS : data.D_ROWS;
+        const bool is_bottom_incomplete_stripe = (data.DIF_ROWS != 0) &&
+                                                 (ib == data.M_BLOCK_ROWS - 1);
+
+        const int b1  = is_bottom_incomplete_stripe ? data.DIF_ROWS : data.B_ROWS;
+        const int db1 = (is_bottom_incomplete_stripe &&
+                        (data.DIF_ROWS < data.D_ROWS)) ?
+                         data.DIF_ROWS : data.D_ROWS;
 
         for (int jb = 0; jb < data.M_BLOCK_COLS; ++jb)
-        {            
-            const int b2  = ((data.DIF_COLS != 0) && (jb == data.M_BLOCK_COLS - 1)) ? data.DIF_COLS : data.B_COLS;
+        {      
+            const bool is_right_incomplete_stripe = (data.DIF_COLS != 0) &&
+                                                    (jb == data.M_BLOCK_COLS - 1);
+
+            const int b2  = is_right_incomplete_stripe ? data.DIF_COLS :
+                                                         data.B_COLS;
             const int loc_stripe_size = db1 * b2;
 
-            // Cycles distribution for main part of block, which is being reallocated
-            vector<int>& sdr_vec = ((data.DIF_ROWS != 0) && (ib == data.M_BLOCK_ROWS - 1)) ?
-                (((jb == data.M_BLOCK_COLS - 1) && (data.DIF_COLS != 0)) ? sdr_corner : sdr_bottom) :
-                (((jb == data.M_BLOCK_COLS - 1) && (data.DIF_COLS != 0)) ? sdr_right  : sdr_main);
+            // Cycles distribution for main part of block,
+            // which is being reallocated
+            vector<int>* sdr_vec;
 
-            // Cycles distribution for bottom part of block, which is being reallocated.
-            // This part is caused by inconsistency between block size and mesh of small blocks
-            vector<int>& sdr_vec_addit = ((data.DIF_ROWS != 0) && (ib == data.M_BLOCK_ROWS - 1)) ?
-                (((jb == data.M_BLOCK_COLS - 1) && (data.DIF_COLS != 0)) ? sdr_corner_addit : sdr_bottom_addit) :
-                (((jb == data.M_BLOCK_COLS - 1) && (data.DIF_COLS != 0)) ? sdr_right_addit  : sdr_main_addit);
+            // Cycles distribution for truncated part of block,
+            // which is being reallocated.
+            vector<int>* sdr_vec_addit;
 
-            TaskData& main_parameters = ((data.DIF_ROWS != 0) && (ib == data.M_BLOCK_ROWS - 1)) ?
-                (((jb == data.M_BLOCK_COLS - 1) && (data.DIF_COLS != 0)) ? corner_data : bottom_data) :
-                (((jb == data.M_BLOCK_COLS - 1) && (data.DIF_COLS != 0)) ? right_data  : main_data);
-            
-            TaskData& addit_parameters = ((data.DIF_ROWS != 0) && (ib == data.M_BLOCK_ROWS - 1)) ?
-                (((jb == data.M_BLOCK_COLS - 1) && (data.DIF_COLS != 0)) ? corner_data_addit : bottom_data_addit) :
-                (((jb == data.M_BLOCK_COLS - 1) && (data.DIF_COLS != 0)) ? right_data_addit : main_data_addit);
+            TaskClass *main_parameters, *addit_parameters;
+            if (is_bottom_incomplete_stripe)
+            {
+                if (is_right_incomplete_stripe)
+                {
+                    sdr_vec = &sdr_corner;
+                    sdr_vec_addit = &sdr_corner_addit;
+                    main_parameters = &corner_data;
+                    addit_parameters = &corner_data_addit;
+                }
+                else
+                {
+                    sdr_vec = &sdr_bottom;
+                    sdr_vec_addit = &sdr_bottom_addit;
+                    main_parameters = &bottom_data;
+                    addit_parameters = &bottom_data_addit;
+                }
+            }
+            else
+            {
+                if (is_right_incomplete_stripe)
+                {
+                    sdr_vec = &sdr_right;
+                    sdr_vec_addit = &sdr_right_addit;
+                    main_parameters = &right_data;
+                    addit_parameters = &right_data_addit;
+                }
+                else
+                {
+                    sdr_vec = &sdr_main;
+                    sdr_vec_addit = &sdr_main_addit;
+                    main_parameters = &main_data;
+                    addit_parameters = &main_data_addit;
+                }
+            }
 
-            // указатель на начало блока
-            double* stripe_data_ptr = data_ptr + ib * data.B_ROWS * data.M_COLS + jb * b1 * data.B_COLS;
+            // Pointer on first element of big block which is being reallocated
+            double* stripe_data_ptr = data_ptr +
+                                      ib * data.B_ROWS * data.M_COLS +
+                                      jb * b1 * data.B_COLS;
 
+            // Reallocation of main part of big block
             for (int it = 0; it < b1 / db1; ++it)
             {
-                reallocate_stripe(stripe_data_ptr, main_parameters, sdr_vec);
+                reallocate_stripe(stripe_data_ptr,
+                                  *main_parameters,
+                                  *sdr_vec);
                 stripe_data_ptr += loc_stripe_size;
             }
-            reallocate_stripe(stripe_data_ptr, addit_parameters, sdr_vec_addit);
+            // Reallocation of truncated part of big block
+            reallocate_stripe(stripe_data_ptr,
+                              *addit_parameters,
+                              *sdr_vec_addit);
         }
     }
 

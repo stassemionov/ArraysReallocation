@@ -24,12 +24,18 @@
     <ClCompile Include="reallocation.cpp">
       <Filter>Файлы исходного кода</Filter>
     </ClCompile>
+    <ClCompile Include="taskdata.cpp">
+      <Filter>Файлы исходного кода</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="service.h">
       <Filter>Заголовочные файлы</Filter>
     </ClInclude>
     <ClInclude Include="reallocation.h">
+      <Filter>Заголовочные файлы</Filter>
+    </ClInclude>
+    <ClInclude Include="taskdata.h">
       <Filter>Заголовочные файлы</Filter>
     </ClInclude>
   </ItemGroup>
