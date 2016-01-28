@@ -11,9 +11,7 @@ using std::sort;
 using std::swap;
 
 // Сделать!
-// 1) Сократить требования к памяти в основном алгоритме
-// 2) В последней функции написать в комментариях размеры рассматриваемой подматрицы для каждого случая
-// 3) Подумать, как сократить огромные промежутки при поиске нового цикла
+// 1) Сократить просмотр больших промежутков при поиске нового цикла
 
 double* standard_to_block_layout_reallocation_buf(const double* data_ptr,
     const TaskClass& task_info)
@@ -48,8 +46,8 @@ double* standard_to_double_block_layout_reallocation_buf(
     return result;
 }
 
-// Проверка, является ли цикл, содержащий индекс index,
-// новым по отношению к циклам, порожденым множеством индексов 'help_vec'
+// Проверка, является ли цикл, содержащий индекс 'index',
+// новым по отношению к циклам, порожденным множеством индексов 'help_vec'
 static inline bool is_new_cycle(const int& index,
                                 const TaskClass& task_info,
                                 const vector<int>& help_vec)
@@ -61,7 +59,7 @@ static inline bool is_new_cycle(const int& index,
         {
             return false;
         }
-        next = task_info.indexFunction(next);
+        next = task_info.indexFunctionReduced(next);
     }
     while (next != index);
 
@@ -73,6 +71,10 @@ vector<int> cycles_distribution_learning(const TaskClass& task_info)
     const TaskData& data = task_info.getDataRef();
 
     // System of distinct representatives of cycles (SDR).
+    // This vector has strucure:
+    // <el_0> <width_0> <el_1> <width_1> ... , where
+    // 'el_i' is element of SDR,
+    // 'width_i' is width of cycle, which contains element 'el_i'.
     vector<int> sdr_vec;
     // Additional cycles representatives for new cycles searching speed-up.
     vector<int> help_vec;
@@ -82,7 +84,7 @@ vector<int> cycles_distribution_learning(const TaskClass& task_info)
         (data.B_ROWS * data.M_COLS - data.B_COLS - data.DIF_COLS);
 
     int gcd_val = gcd(data.B_COLS, data.DIF_COLS);
-    // Step of iterations
+    // Iteration step.
     // In case of multiplicity, every cycle width equals 'b2'.
     // It means, we can transfer 'b2' elements with one step)
     // Otherwise, cycle width equals GCD('b2','N2' mod 'b2').
@@ -101,7 +103,10 @@ vector<int> cycles_distribution_learning(const TaskClass& task_info)
     // This counter controls count of
     // additional cycles representatives insertion.
     int insert_counter = 0;
-
+    
+    int previous_min = -step - 1;
+    int previous_max = -step - 1;
+    int previous_len = -step - 1;
     int next_cycle_begining = i;
     int it = 0;
     // * Learning of current cycles distribution
@@ -117,7 +122,7 @@ vector<int> cycles_distribution_learning(const TaskClass& task_info)
         do
         {
             // go to next position in this cycle
-            i = task_info.indexFunction(i);
+            i = task_info.indexFunctionReduced(i);
 
             // Statistics collecting...
             if (min_index > i)
@@ -155,14 +160,49 @@ vector<int> cycles_distribution_learning(const TaskClass& task_info)
         // We don't need to collect indices of cycles with 1 element
         if (length > 1)
         {
-            sdr_vec.push_back(min_index);
-            if (!m_find(i, help_vec))
+            bool is_the_same_cycle = false;
+            // Если новый цикл параллелен предыдущему,
+            // то это части одного широкого цикла
+            if (min_index == previous_min + step)
+            if (max_index == previous_max + step)
+            if (length == previous_len)
+            if (task_info.indexFunctionReduced(min_index) == task_info.indexFunctionReduced(previous_min) + step)
+            {
+                is_the_same_cycle = true;
+                // Если текущий цикл уже отмечен как цикл нестандартной ширины
+                if (sdr_vec.back() < 0)
+                {
+                    // то его ширина увеличивается на 'step'
+                    sdr_vec.back() -= step;
+                }
+                else
+                {
+                    // Иначе, обнаружен цикл, параллельный текущему;
+                    // обозначаем нестандартную ширину цикла -
+                    // двойную от текущей
+                    sdr_vec.push_back(-2*step);
+                }
+            }
+            if (!is_the_same_cycle)
+            {
+                sdr_vec.push_back(min_index);
+            }
+            previous_min = min_index;
+            previous_max = max_index;
+            previous_len = length;
+
+            if (!m_find(min_index, help_vec))
             {
                 help_vec.push_back(min_index);
                 sort(help_vec.begin(), help_vec.end());
             }
-            // printf("\nMIN = %d \nMAX = %d\nLEN = %d\n",
-            // min_index, max_index, length);
+
+            /*printf("\nMIN = %d\nMAX = %d\nLEN = %d\n",
+            min_index, max_index, length);
+            for (int uu = 0; uu < sdr_vec.size(); ++uu)
+                printf("%d ", sdr_vec[uu]);
+            printf("\n\n");
+            system("pause");*/
         }
 
         if (it < iteration_count)
@@ -177,9 +217,10 @@ vector<int> cycles_distribution_learning(const TaskClass& task_info)
         }
     }
     // * End of learning
-
-    // printf("\n\n HELP %zd \n", help_vec.size());
-    // printf("\n SDR  %zd \n\n", sdr_vec.size());
+    
+    // printf("\n\n HELP %zd\n", help_vec.size());
+    // printf("\n SDR %zd\n\n", sdr_vec.size());
+    // system("pause");
 
     return sdr_vec;
 }
@@ -201,25 +242,37 @@ void reallocate_stripe(double* stripe_data,
     double* loc_data_ptr = NULL;
 
     const int gcd_val = gcd(data.B_COLS, data.DIF_COLS);
-    const int len = sizeof(double)* ((data.DIF_COLS == 0) ? data.B_COLS :
-        (((data.DIF_COLS > 1) && (gcd_val > 1)) ? gcd_val : 1));
+    const int standard_width = sizeof(double) * ((data.DIF_COLS == 0) ?
+        data.B_COLS : (((data.DIF_COLS > 1) && (gcd_val > 1)) ? gcd_val : 1));
 
     size_t cycle_counter = 0;
     // Reallocation within the bounds of current block stripe
     while (cycle_counter < sdr_vec.size())
     {
-        int i = sdr_vec[cycle_counter++];
-        memcpy(buffer1, stripe_data + i, len);
+        int i = sdr_vec[cycle_counter];
+        int width = standard_width;
+        if (++cycle_counter < sdr_vec.size())
+        {
+            int next_el = sdr_vec[cycle_counter];
+            // Non-standard width of cycle is stored as negative number.
+            if (next_el < 0)
+            {
+                width = (-next_el) * sizeof(double);
+                ++cycle_counter;
+            }
+        }
+                
+        memcpy(buffer1, stripe_data + i, width);
         // Remember place, where we start this cycle
         const int first_in_cycle = i;
         // Do until cycle beginning isn't reached
         do
         {
-            i = task_info.indexFunction(i);
+            i = task_info.indexFunctionReduced(i);
             loc_data_ptr = stripe_data + i;
 
-            memcpy(buffer2, loc_data_ptr, len);
-            memcpy(loc_data_ptr, buffer1, len);
+            memcpy(buffer2, loc_data_ptr, width);
+            memcpy(loc_data_ptr, buffer1, width);
             swap(buffer1, buffer2);
         }
         while (first_in_cycle != i);
@@ -267,7 +320,6 @@ double* standard_to_block_layout_reallocation(double* data_ptr,
 
     return data_ptr;
 }
-
 
 double* standard_to_double_block_layout_reallocation(double* data_ptr,
                                                      const TaskClass& task_info)
@@ -396,7 +448,7 @@ double* standard_to_double_block_layout_reallocation(double* data_ptr,
                          data.DIF_ROWS : data.D_ROWS;
 
         for (int jb = 0; jb < data.M_BLOCK_COLS; ++jb)
-        {      
+        {
             const bool is_right_incomplete_stripe = (data.DIF_COLS != 0) &&
                                                     (jb == data.M_BLOCK_COLS - 1);
 

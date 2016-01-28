@@ -135,6 +135,30 @@ public:
             index_j - block_j * m_data.B_COLS;             // 2
     }
 
+    // ѕринимает на вход адрес элемента в массиве со строчным размещением,
+    // возвращает адрес этого элемента в массиве с блочным размещением,
+    // задаваемым набором параматров 'data',
+    // при условии, что передан адрес элемента первой полосы блоков
+    inline int indexFunctionReduced(const int& index) const
+    {
+        const int&& i_col = index % m_data.M_COLS;
+      //  const int& curr_block_width = 
+      //      (i_col < m_data.M_COLS - m_data.DIF_COLS) ?
+      //      m_data.B_COLS : m_data.DIF_COLS;
+
+        if (i_col < m_data.M_COLS - m_data.DIF_COLS)
+        {
+            return m_data.B_ROWS * m_data.B_COLS * (i_col / m_data.B_COLS) +
+                m_data.B_COLS * (index / m_data.M_COLS) +
+                i_col % m_data.B_COLS;
+        }
+        else
+        {
+            return m_data.B_ROWS * m_data.B_COLS * (i_col / m_data.B_COLS) +
+                m_data.DIF_COLS * (index / m_data.M_COLS) +
+                i_col % m_data.B_COLS;
+        }
+    }
 private:
     TaskData m_data;
 };
