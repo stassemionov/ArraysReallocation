@@ -12,6 +12,9 @@ using std::swap;
 
 // Сделать!
 // 1) Сократить просмотр больших промежутков при поиске нового цикла
+// 2) Определить более надежное условие параллельности циклов
+// 3) Найти способ не заносить элементы параллельных циклов в help_vec
+// 4) Написать тест для измерения скорости переразмещения
 
 double* standard_to_block_layout_reallocation_buf(const double* data_ptr,
     const TaskClass& task_info)
@@ -197,12 +200,12 @@ vector<int> cycles_distribution_learning(const TaskClass& task_info)
                 sort(help_vec.begin(), help_vec.end());
             }
 
-            /*printf("\nMIN = %d\nMAX = %d\nLEN = %d\n",
-            min_index, max_index, length);
-            for (int uu = 0; uu < sdr_vec.size(); ++uu)
-                printf("%d ", sdr_vec[uu]);
-            printf("\n\n");
-            system("pause");*/
+  //          printf("\nMIN = %d\nMAX = %d\nLEN = %d\n",
+  //          min_index, max_index, length);
+            //for (int uu = 0; uu < sdr_vec.size(); ++uu)
+            //    printf("%d ", sdr_vec[uu]);
+            //printf("\n\n");
+            //system("pause");
         }
 
         if (it < iteration_count)
@@ -218,9 +221,9 @@ vector<int> cycles_distribution_learning(const TaskClass& task_info)
     }
     // * End of learning
     
-    // printf("\n\n HELP %zd\n", help_vec.size());
-    // printf("\n SDR %zd\n\n", sdr_vec.size());
-    // system("pause");
+  //   printf("\n\n HELP %zd\n", help_vec.size());
+  //   printf("\n SDR %zd\n\n", sdr_vec.size());
+  //   system("pause");
 
     return sdr_vec;
 }
