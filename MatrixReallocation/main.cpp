@@ -1,10 +1,10 @@
 ﻿#include "reallocation.h"
 #include "service.h"
 #include "multiplication.h"
+#include "testing.h"
 
 #include <fstream>
 #include <ctime>
-#include <iomanip>
 
 using std::cout;
 using std::ifstream;
@@ -35,7 +35,13 @@ int main()
     ostr << "  > db1 = " << db1 << "\n";
     ostr << "  > db2 = " << db2 << "\n\n";
 
-    TaskClass params_left, params_right, params_gen;
+    ostr << " [> Подбор параметров двойного блочного размещения...\n";
+    Blocks optimal = select_optimal_double_block_size(1000,
+                                                      15, 150, 1,
+                                                      10, 40, 1);
+    ostr << "    Результат: " << optimal.main_block << " и " << optimal.small_block << std::endl;
+
+/*    TaskClass params_left, params_right, params_gen;
     params_left.makeData(N1, N2, b1, b2, db1, db2);
     params_right.makeData(N2, N3, b2, b1, db2, db1);
     params_gen.makeData(N1, N3, b1, b1, db1, db1);
@@ -58,8 +64,6 @@ int main()
     double time_ = clock();
     generate(left_mat, N1, N2);
     generate(rgt_mat,  N2, N3);
-   // simple_fill(left_mat, N1, N2);
-   // simple_fill(rgt_mat, N2, N3);
     time_ = (clock() - time_) / (1.0 * CLOCKS_PER_SEC);
     ostr << "[ " << time_ << " секунд ]\n";
 
@@ -158,7 +162,5 @@ int main()
 
     ostr << "  > Норма разности: ";
     ostr << compare_arrays(gen_mat3, gen_mat2, N1*N3) << "\n\n";
-
-   // print_to(ostr, gen_mat1, N1, N3, 7);
-   // print_to(ostr, gen_mat2, N1, N3, 7);
+    */
 }

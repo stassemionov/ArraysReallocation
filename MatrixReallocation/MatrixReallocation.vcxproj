@@ -162,6 +162,7 @@
     <ClCompile Include="reallocation.cpp" />
     <ClCompile Include="service.cpp" />
     <ClCompile Include="taskdata.cpp" />
+    <ClCompile Include="testing.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="multiplication.h" />

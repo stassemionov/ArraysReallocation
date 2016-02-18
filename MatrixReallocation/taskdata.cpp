@@ -2,7 +2,7 @@
 
 TaskClass::TaskClass() {}
 
-TaskClass::TaskClass(TaskData& init_data)
+TaskClass::TaskClass(const TaskData& init_data)
 {
     makeData(init_data.M_ROWS, init_data.M_COLS,
         init_data.B_ROWS, init_data.B_COLS,

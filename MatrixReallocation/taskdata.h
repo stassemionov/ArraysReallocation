@@ -27,7 +27,7 @@ public:
 
     TaskClass();
 
-    TaskClass(TaskData& init_data);
+    TaskClass(const TaskData& init_data);
 
     void makeData(const int& rows_count, const int& cols_count,
         const int& block_rows_count, const int& block_cols_count,
