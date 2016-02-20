@@ -1,6 +1,8 @@
 #ifndef _TESTING_H_
 #define _TESTING_H_
 
+#include "taskdata.h"
+
 struct Blocks
 {
     unsigned int main_block;
@@ -25,5 +27,17 @@ Blocks select_optimal_double_block_size(const unsigned int N,
     const unsigned int end_double_block_val,
     const unsigned int selection_double_block_step,
     const bool         console_info_output = false);
+
+// Tool for matrix multiplication performance testing.
+// Make tiled and double tiled multiplication with standard allocation
+// and tiled and double tiled multiplication with block and
+// double block allocations correspondingly.
+void matrix_multiplication_tests(const TaskClass& params_left,
+                          const TaskClass& params_right,
+                          const bool       console_info_output = false);
+
+void correctness_test(const TaskClass& params_left,
+    const TaskClass& params_right,
+    const bool       console_info_output = false);
 
 #endif  // _TESTING_H_

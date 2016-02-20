@@ -4,17 +4,14 @@
 #include <cmath>
 #include <algorithm>
 
-// #include "omp.h"
-
 using std::vector;
 using std::sort;
 using std::swap;
 
 // Сделать!
 // 1) Сократить просмотр больших промежутков при поиске нового цикла
-// 2) Определить более надежное условие параллельности циклов
+// 2) Определить более надежное условие параллельности циклов (да и это не подводит..)
 // 3) Найти способ не заносить элементы параллельных циклов в help_vec
-// 4) Написать тест для измерения скорости переразмещения
 
 double* standard_to_block_layout_reallocation_buf(const double* data_ptr,
     const TaskClass& task_info)
@@ -51,7 +48,7 @@ double* standard_to_double_block_layout_reallocation_buf(
 
 // Проверка, является ли цикл, содержащий индекс 'index',
 // новым по отношению к циклам, порожденным множеством индексов 'help_vec'
-static inline bool is_new_cycle(const int& index,
+static inline bool is_new_cycle(const int index,
                                 const TaskClass& task_info,
                                 const vector<int>& help_vec)
 {
@@ -182,7 +179,7 @@ vector<int> cycles_distribution_learning(const TaskClass& task_info)
                 {
                     // Иначе, обнаружен цикл, параллельный текущему;
                     // обозначаем нестандартную ширину цикла -
-                    // двойную от текущей
+                    // двойную от стандартной
                     sdr_vec.push_back(-2*step);
                 }
             }
