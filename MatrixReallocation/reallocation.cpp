@@ -4,14 +4,18 @@
 #include <cmath>
 #include <algorithm>
 
-using std::vector;
 using std::sort;
 using std::swap;
+using std::min;
 
 // Сделать!
 // 1) Сократить просмотр больших промежутков при поиске нового цикла
 // 2) Определить более надежное условие параллельности циклов (да и это не подводит..)
 // 3) Найти способ не заносить элементы параллельных циклов в help_vec
+// 4) Адаптировать новые структуры в алгоритм двойного блочного переразмещения и всё протестировать
+// 5) Сделать обратное от двойного блочного переразмещения
+// 6) Подумать и поэкспериментировать, можно ли,
+//    имея sdr для [b1,b2,d1,d2] и для [b2,b3,d2,d3], получить sdr для [b1,b3,d1,d3] ?
 
 double* standard_to_block_layout_reallocation_buf(const double* data_ptr,
     const TaskClass& task_info)
@@ -281,8 +285,64 @@ void reallocate_stripe(double* stripe_data,
     delete[] buffer2;
 }
 
-double* standard_to_block_layout_reallocation(double* data_ptr,
-                                              const TaskClass& task_info)
+void reallocate_stripe_inverse(double* stripe_data,
+                               const TaskClass& task_info,
+                               const vector<int>& sdr_vec)
+{
+    const TaskData& data = task_info.getDataRef();
+
+    if (sdr_vec.empty() || (stripe_data == NULL) ||
+        (data.B_ROWS == 0) || (data.B_COLS == 0))
+    {
+        return;
+    }
+
+    double* buffer1 = new double[data.B_COLS];
+    double* buffer2 = new double[data.B_COLS];
+    double* loc_data_ptr = NULL;
+
+    const int gcd_val = gcd(data.B_COLS, data.DIF_COLS);
+    const int standard_width = sizeof(double) * ((data.DIF_COLS == 0) ?
+        data.B_COLS : (((data.DIF_COLS > 1) && (gcd_val > 1)) ? gcd_val : 1));
+
+    size_t cycle_counter = 0;
+    // Reallocation within the bounds of current block stripe
+    while (cycle_counter < sdr_vec.size())
+    {
+        int i = sdr_vec[cycle_counter];
+        int width = standard_width;
+        if (++cycle_counter < sdr_vec.size())
+        {
+            int next_el = sdr_vec[cycle_counter];
+            // Non-standard width of cycle is stored as negative number.
+            if (next_el < 0)
+            {
+                width = (-next_el) * sizeof(double);
+                ++cycle_counter;
+            }
+        }
+
+        memcpy(buffer1, stripe_data + i, width);
+        // Remember place, where we start this cycle
+        const int first_in_cycle = i;
+        // Do until cycle beginning isn't reached
+        do
+        {
+            i = task_info.indexFunctionReducedInverse(i);
+            loc_data_ptr = stripe_data + i;
+
+            memcpy(buffer2, loc_data_ptr, width);
+            memcpy(loc_data_ptr, buffer1, width);
+            swap(buffer1, buffer2);
+        } while (first_in_cycle != i);
+    }
+    delete[] buffer1;
+    delete[] buffer2;
+}
+
+BlockReallocationInfo* standard_to_block_layout_reallocation(
+                                                double* data_ptr,
+                                                const TaskClass& task_info)
 {
     const TaskData& data = task_info.getDataRef();
 
@@ -299,18 +359,14 @@ double* standard_to_block_layout_reallocation(double* data_ptr,
                               data.DIF_ROWS, data.B_COLS);
         sdr_vec_last_stripe = cycles_distribution_learning(subtask_info);
     }
-    // double tt = omp_get_wtime();
     // Reallocation
-    const int stripe_size = data.B_ROWS * data.M_COLS;
     double* stripe_data_ptr = data_ptr;
     // Every iteration corresponds to the separate stripe
     for (int it = 0; it < data.M_ROWS / data.B_ROWS; ++it)
     {
         reallocate_stripe(stripe_data_ptr, task_info, sdr_vec_main);
-        stripe_data_ptr += stripe_size;
+        stripe_data_ptr += data.STRIPE_SIZE;
     }
-    // tt = omp_get_wtime() - tt;
-    // printf("\n REALLOCATION %f\n\n", tt);
 
     // Reallocation of last stripe elements,
     // if count of its rows is less than B_ROWS
@@ -318,14 +374,24 @@ double* standard_to_block_layout_reallocation(double* data_ptr,
     // in main part of array isn't the same).
     reallocate_stripe(stripe_data_ptr, subtask_info, sdr_vec_last_stripe);
 
-    return data_ptr;
+    BlockReallocationInfo* res_info = new BlockReallocationInfo;
+    res_info->main_data = task_info.getDataRef();
+    res_info->main_data_addit = subtask_info;
+    res_info->sdr_main = sdr_vec_main;
+    res_info->sdr_addit = sdr_vec_last_stripe;
+
+    return res_info;
 }
 
-double* standard_to_double_block_layout_reallocation(double* data_ptr,
+DoubleBlockReallocationInfo* standard_to_double_block_layout_reallocation(
+                                                     double* data_ptr,
                                                      const TaskClass& task_info)
 {
+    DoubleBlockReallocationInfo* realloc_info = new DoubleBlockReallocationInfo;
+
     // Firstly, make block reallocation
-    standard_to_block_layout_reallocation(data_ptr, task_info);
+    realloc_info->upper_level_realloc_info =
+        standard_to_block_layout_reallocation(data_ptr, task_info);
 
     // Secondly, every block must be reallocated locally
     // as well as whole matrix was reallocated just now.
@@ -436,6 +502,36 @@ double* standard_to_double_block_layout_reallocation(double* data_ptr,
     }
     // ... end of learning.
 
+    BlockReallocationInfo* main_realloc_info = new BlockReallocationInfo;
+    BlockReallocationInfo* right_realloc_info = new BlockReallocationInfo;
+    BlockReallocationInfo* bottom_realloc_info = new BlockReallocationInfo;
+    BlockReallocationInfo* corner_realloc_info = new BlockReallocationInfo;
+
+    main_realloc_info->main_data = main_data;
+    main_realloc_info->main_data_addit = main_data_addit;
+    main_realloc_info->sdr_main = sdr_main;
+    main_realloc_info->sdr_addit = sdr_main_addit;
+
+    right_realloc_info->main_data = right_data;
+    right_realloc_info->main_data_addit = right_data_addit;
+    right_realloc_info->sdr_main = sdr_right;
+    right_realloc_info->sdr_addit = sdr_right_addit;
+
+    bottom_realloc_info->main_data = bottom_data;
+    bottom_realloc_info->main_data_addit = bottom_data_addit;
+    bottom_realloc_info->sdr_main = sdr_bottom;
+    bottom_realloc_info->sdr_addit = sdr_bottom_addit;
+
+    corner_realloc_info->main_data = corner_data;
+    corner_realloc_info->main_data_addit = corner_data_addit;
+    corner_realloc_info->sdr_main = sdr_corner;
+    corner_realloc_info->sdr_addit = sdr_corner_addit;
+
+    realloc_info->main_realloc_info = main_realloc_info;
+    realloc_info->right_realloc_info = right_realloc_info;
+    realloc_info->bottom_realloc_info = bottom_realloc_info;
+    realloc_info->corner_realloc_info = corner_realloc_info;
+
     // Reallocation ...
     for (int ib = 0; ib < data.M_BLOCK_ROWS; ++ib)
     {
@@ -520,5 +616,73 @@ double* standard_to_double_block_layout_reallocation(double* data_ptr,
         }
     }
 
+    return realloc_info;
+}
+
+double* block_to_standard_layout_reallocation(double* data_ptr,
+                                              const BlockReallocationInfo* realloc_info)
+{
+    const TaskClass main_task_data = realloc_info->main_data;
+    const TaskClass addit_task_data = realloc_info->main_data_addit;
+    const vector<int>& sdr_vec = realloc_info->sdr_main;
+    const vector<int>& sdr_vec_last_stripe = realloc_info->sdr_addit;
+    
+    const TaskData& data = main_task_data.getDataRef();
+    double* stripe_data_ptr = data_ptr;
+    // Every iteration corresponds to the separate stripe
+    for (int it = 0; it < data.M_ROWS / data.B_ROWS; ++it)
+    {
+        reallocate_stripe_inverse(stripe_data_ptr, main_task_data, sdr_vec);
+        stripe_data_ptr += data.STRIPE_SIZE;
+    }
+
+    reallocate_stripe_inverse(stripe_data_ptr, addit_task_data, sdr_vec_last_stripe);
+
+    return data_ptr;
+}
+
+double* double_block_to_standard_layout_reallocation(
+                            double* data_ptr,
+                            const DoubleBlockReallocationInfo* realloc_info)
+{
+    const BlockReallocationInfo* block_realloc_info = realloc_info->upper_level_realloc_info;
+    const TaskData& block_realloc_params = block_realloc_info->main_data.getDataRef();
+    const int N1 = block_realloc_params.M_ROWS;
+    const int N2 = block_realloc_params.M_COLS;
+    const int NB1 = block_realloc_params.M_BLOCK_ROWS;
+    const int NB2 = block_realloc_params.M_BLOCK_COLS;
+    const int B1 = block_realloc_params.B_ROWS;
+    const int B2 = block_realloc_params.B_COLS;
+
+    // Reallocates each big block with inverse block reallocation algorythm
+    BlockReallocationInfo* local_realloc_info = NULL;
+    for (int ib = 0; ib < NB1; ++ib)
+    {
+        const int row_shift = ib*B1*N2;
+        const int rb1 = min(B1, N1 - ib*B1);
+        for (int jb = 0; jb < NB2; ++jb)
+        {
+            const int rb2 = min(B2, N2 - jb*B2);
+            double* block_begin = data_ptr + row_shift + jb*rb1*B2;
+
+            if (rb1 == B1)
+            {
+                if (rb2 == B2)
+                    local_realloc_info = realloc_info->main_realloc_info;
+                else
+                    local_realloc_info = realloc_info->right_realloc_info;
+            }
+            else
+            {
+                if (rb2 == B2)
+                    local_realloc_info = realloc_info->bottom_realloc_info;
+                else
+                    local_realloc_info = realloc_info->corner_realloc_info;
+            }
+            block_to_standard_layout_reallocation(block_begin, local_realloc_info);
+        }
+    }
+    // Reallocates whole matrix after each block reallocation
+    block_to_standard_layout_reallocation(data_ptr, block_realloc_info);
     return data_ptr;
 }

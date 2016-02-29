@@ -11,7 +11,8 @@ struct Blocks
 
 // Tool for block size selection for square matrix block multiplication.
 // Require 40*N*N bytes of additional memory.
-unsigned int select_optimal_block_size(const unsigned int N,
+unsigned int select_optimal_block_size_multiplication(
+    const unsigned int N,
     const unsigned int start_block_val,
     const unsigned int end_block_val,
     const unsigned int selection_step);
@@ -19,7 +20,8 @@ unsigned int select_optimal_block_size(const unsigned int N,
 // Tool for double block size selection for square matrix block multiplication.
 // Require 40*N*N bytes of additional memory.
 // Returns structs that is pair - main block size and small block size.
-Blocks select_optimal_double_block_size(const unsigned int N,
+Blocks select_optimal_double_block_size_multiplication(
+    const unsigned int N,
     const unsigned int start_block_val,
     const unsigned int end_block_val,
     const unsigned int selection_block_step,
@@ -35,6 +37,15 @@ Blocks select_optimal_double_block_size(const unsigned int N,
 void matrix_multiplication_tests(const TaskClass& params_left,
                           const TaskClass& params_right,
                           const bool       console_info_output = false);
+
+void floyd_test(const TaskClass& parameters,
+    const bool console_info_output);
+
+unsigned int select_optimal_block_size_floyd(
+    const unsigned int N,
+    const unsigned int start_block_val,
+    const unsigned int end_block_val,
+    const unsigned int selection_step);
 
 void correctness_test(const TaskClass& params_left,
     const TaskClass& params_right,

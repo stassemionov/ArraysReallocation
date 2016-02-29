@@ -3,6 +3,9 @@
 
 #include <cstdlib>
 #include <cmath>
+#include <vector>
+
+using std::vector;
 
 struct TaskData
 {
@@ -19,6 +22,8 @@ struct TaskData
     int M_BLOCK_COLS;       // число блоков в направлении строки
     int DIF_ROWS;           // смещение сетки по столбцу
     int DIF_COLS;           // смещение сетки по строке
+    int STRIPE_SIZE;
+    int BLOCK_SIZE;
 };
 
 class TaskClass
@@ -28,6 +33,11 @@ public:
     TaskClass();
 
     TaskClass(const TaskData& init_data);
+
+    TaskClass(const int& rows_count, const int& cols_count,
+        const int& block_rows_count, const int& block_cols_count,
+        const int& double_block_rows_count = 0,
+        const int& double_block_cols_count = 0);
 
     void makeData(const int& rows_count, const int& cols_count,
         const int& block_rows_count, const int& block_cols_count,
@@ -159,8 +169,56 @@ public:
                 i_col % m_data.B_COLS;
         }
     }
+
+    inline int indexFunctionReducedInverse(const int& index) const
+    {
+        const int&& block_number = index / m_data.BLOCK_SIZE;
+        const int&& local_shift = index % m_data.BLOCK_SIZE;
+        
+        if (m_data.STRIPE_SIZE - m_data.BLOCK_SIZE * block_number < m_data.BLOCK_SIZE)
+        {
+            //local_i = local_shift / m_data.DIF_COLS;
+            //local_j = local_shift % m_data.DIF_COLS;
+            //return local_i * m_data.M_COLS + local_j + block_number * m_data.B_COLS;
+
+            return (local_shift / m_data.DIF_COLS) * m_data.M_COLS +
+                   (local_shift % m_data.DIF_COLS) +
+                   block_number * m_data.B_COLS;
+        }
+        else
+        {
+            //const int&& local_i = local_shift / m_data.B_COLS;
+            //const int&& local_j = local_shift % m_data.B_COLS;
+            //return local_i * m_data.M_COLS + local_j + block_number * m_data.B_COLS;
+
+            return (local_shift / m_data.B_COLS) * m_data.M_COLS +
+                   (local_shift % m_data.B_COLS) +
+                   block_number * m_data.B_COLS;
+        }
+    }
+
 private:
     TaskData m_data;
+};
+
+struct BlockReallocationInfo
+{
+    // Systems of Distinct Representatives of reallocation cycles
+    vector<int> sdr_main;
+    vector<int> sdr_addit;
+
+    // Parameters of reallocation
+    TaskClass main_data;
+    TaskClass main_data_addit;
+};
+
+struct DoubleBlockReallocationInfo
+{
+    BlockReallocationInfo* upper_level_realloc_info = NULL;
+    BlockReallocationInfo* main_realloc_info = NULL;
+    BlockReallocationInfo* right_realloc_info = NULL;
+    BlockReallocationInfo* bottom_realloc_info = NULL;
+    BlockReallocationInfo* corner_realloc_info = NULL;
 };
 
 #endif  // _TASKDATA_H_

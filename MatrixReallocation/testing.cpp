@@ -1,6 +1,7 @@
 #include "testing.h"
 #include "reallocation.h"
 #include "multiplication.h"
+#include "floydalg.h"
 #include "service.h"
 
 #include <cstring>
@@ -9,7 +10,7 @@
 
 using std::min;
 
-Blocks select_optimal_double_block_size(const unsigned int N,
+Blocks select_optimal_double_block_size_multiplication(const unsigned int N,
     const unsigned int start_block_val,
     const unsigned int end_block_val,
     const unsigned int selection_block_step,
@@ -153,7 +154,8 @@ Blocks select_optimal_double_block_size(const unsigned int N,
     return result;
 }
 
-unsigned int select_optimal_block_size(const unsigned int N,
+unsigned int select_optimal_block_size_multiplication(
+                                       const unsigned int N,
                                        const unsigned int start_block_val,
                                        const unsigned int end_block_val,
                                        const unsigned int selection_step)
@@ -233,9 +235,9 @@ void matrix_multiplication_tests(const TaskClass& params_left,
     const int N3 = params_right.getDataRef().M_COLS;
 
     FILE* log_file;
-    fopen_s(&log_file, "../mult_test_log.txt", "w");
+    fopen_s(&log_file, "../mult_test_log.txt", "a");
 
-    fprintf(log_file, "\n\n [> Запуск тестов для параметров:\n");
+    fprintf(log_file, "\n [> Запуск тестов для параметров:\n");
     fprintf(log_file, "    N1 = %5d, N2 = %5d, N3 = %5d\n", N1, N2, N3);
     fprintf(log_file, "    B1 = %3d, B2 = %3d, B3 = %3d\n",
         params_left.getDataRef().B_ROWS, params_left.getDataRef().B_COLS, params_right.getDataRef().B_COLS);
@@ -254,11 +256,11 @@ void matrix_multiplication_tests(const TaskClass& params_left,
 
     double* left_mat = new double[N1*N2];
     double* rgt_mat = new double[N2*N3];
-    double* left_mat_copy = new double[N1*N2];
-    double* rgt_mat_copy = new double[N2*N3];
     double* gen_mat = new double[N1*N3];
 
-    const double memory_val = (8.0 * (2*N1*N2 + 2*N2*N3 + N1*N3)) / (1024 * 1024);
+//    BlockReallocationInfo gen_realloc_info;
+
+    const double memory_val = (8.0 * (N1*N2 + N2*N3 + N1*N3)) / (1024 * 1024);
     fprintf(log_file, "  > Объем выделенной памяти:   [ %.2lf Мб ]\n", memory_val);
     fprintf(log_file, "    ---------------------------------------------------------------\n");
     if (console_info_output)
@@ -276,10 +278,10 @@ void matrix_multiplication_tests(const TaskClass& params_left,
     generate(left_mat, N1, N2);
     generate(rgt_mat, N2, N3);
     time_ = (clock() - time_) / (1.0 * CLOCKS_PER_SEC);
-    fprintf(log_file, "[ %lf секунд ]\n", time_);
+    fprintf(log_file, "[ %.3lf секунд ]\n", time_);
     if (console_info_output)
     {
-        printf("[ %lf секунд ]\n", time_);
+        printf("[ %.3lf секунд ]\n", time_);
     }
 
     fprintf(log_file, "  > Умножение матриц (тайлинг)...                  ");
@@ -291,10 +293,10 @@ void matrix_multiplication_tests(const TaskClass& params_left,
     matrix_multiplication_tiled(gen_mat, left_mat, rgt_mat,
         params_left, params_right);
     time_ = (clock() - time_) / (1.0 * CLOCKS_PER_SEC);
-    fprintf(log_file, "[ %lf секунд ]\n", time_);
+    fprintf(log_file, "[ %.3lf секунд ]\n", time_);
     if (console_info_output)
     {
-        printf("[ %lf секунд ]\n", time_);
+        printf("[ %.3lf секунд ]\n", time_);
     }
 
     memset(gen_mat, 0, N1*N3*sizeof(double));
@@ -308,15 +310,14 @@ void matrix_multiplication_tests(const TaskClass& params_left,
     matrix_multiplication_double_tiled(gen_mat, left_mat, rgt_mat,
                                        params_left, params_right);
     time_ = (clock() - time_) / (1.0 * CLOCKS_PER_SEC);
-    fprintf(log_file, "[ %lf  секунд ]\n", time_);
+    fprintf(log_file, "[ %.3lf секунд ]\n", time_);
     if (console_info_output)
     {
-        printf("[ %lf  секунд ]\n", time_);
+        printf("[ %.3lf секунд ]\n", time_);
     }
 
     memset(gen_mat, 0, N1*N3*sizeof(double));
     
-    memcpy(left_mat_copy, left_mat, N1*N2*sizeof(double));
     fprintf(log_file, "  > Блочное переразмещение...\n");
     fprintf(log_file, "    Левая матрица...                               ");
     if (console_info_output)
@@ -325,27 +326,28 @@ void matrix_multiplication_tests(const TaskClass& params_left,
         printf("    Левая матрица...                               ");
     }
     time_ = clock();
-    standard_to_block_layout_reallocation(left_mat, params_left);
+    BlockReallocationInfo* left_realloc_info = 
+        standard_to_block_layout_reallocation(left_mat, params_left);
     time_ = (clock() - time_) / (1.0 * CLOCKS_PER_SEC);
-    fprintf(log_file, "[ %lf  секунд ]\n", time_);
+    fprintf(log_file, "[ %.3lf секунд ]\n", time_);
     if (console_info_output)
     {
-        printf("[ %lf  секунд ]\n", time_);
+        printf("[ %.3lf секунд ]\n", time_);
     }
 
-    memcpy(rgt_mat_copy, rgt_mat, N2*N3*sizeof(double));
     fprintf(log_file, "    Правая матрица...                              ");
     if (console_info_output)
     {
         printf("    Правая матрица...                              ");
     }
     time_ = clock();
-    standard_to_block_layout_reallocation(rgt_mat, params_right);
+    BlockReallocationInfo* right_realloc_info =
+        standard_to_block_layout_reallocation(rgt_mat, params_right);
     time_ = (clock() - time_) / (1.0 * CLOCKS_PER_SEC);
-    fprintf(log_file, "[ %lf  секунд ]\n", time_);
+    fprintf(log_file, "[ %.3lf секунд ]\n", time_);
     if (console_info_output)
     {
-        printf("[ %lf  секунд ]\n", time_);
+        printf("[ %.3lf секунд ]\n", time_);
     }
 
     fprintf(log_file, "  > Блочное умножение матриц (тайлинг)...          ");
@@ -357,10 +359,28 @@ void matrix_multiplication_tests(const TaskClass& params_left,
     block_matrix_multiplication_tiled(gen_mat, left_mat, rgt_mat,
                                       params_left, params_right);
     time_ = (clock() - time_) / (1.0 * CLOCKS_PER_SEC);
-    fprintf(log_file, "[ %lf  секунд ]\n", time_);
+    fprintf(log_file, "[ %.3lf секунд ]\n", time_);
     if (console_info_output)
     {
-        printf("[ %lf  секунд ]\n", time_);
+        printf("[ %.3lf секунд ]\n", time_);
+    }
+
+    memset(gen_mat, 0, N1*N3*sizeof(double));
+
+    fprintf(log_file, "  > Обратное переразмещение...                     ");
+    if (console_info_output)
+    {
+        printf("  > Обратное переразмещение...                     ");
+    }
+    time_ = clock();
+//    block_to_standard_layout_reallocation(gen_mat, );
+    block_to_standard_layout_reallocation(left_mat, left_realloc_info);
+    block_to_standard_layout_reallocation(rgt_mat, right_realloc_info);
+    time_ = (clock() - time_) / (1.0 * CLOCKS_PER_SEC);
+    fprintf(log_file, "[ %.3lf секунд ]\n", time_);
+    if (console_info_output)
+    {
+        printf("[ %.3lf секунд ]\n", time_);
     }
 
     fprintf(log_file, "  > Двойное блочное переразмещение...\n");
@@ -371,12 +391,13 @@ void matrix_multiplication_tests(const TaskClass& params_left,
         printf("    Левая матрица...                               ");
     }
     time_ = clock();
-    standard_to_double_block_layout_reallocation(left_mat_copy, params_left);
+    DoubleBlockReallocationInfo* left_double_realloc_info =
+        standard_to_double_block_layout_reallocation(left_mat, params_left);
     time_ = (clock() - time_) / (1.0 * CLOCKS_PER_SEC);
-    fprintf(log_file, "[ %lf  секунд ]\n", time_);
+    fprintf(log_file, "[ %.3lf секунд ]\n", time_);
     if (console_info_output)
     {
-        printf("[ %lf  секунд ]\n", time_);
+        printf("[ %.3lf секунд ]\n", time_);
     }
 
     fprintf(log_file, "    Правая матрица...                              ");
@@ -385,12 +406,13 @@ void matrix_multiplication_tests(const TaskClass& params_left,
         printf("    Правая матрица...                              ");
     }
     time_ = clock();
-    standard_to_double_block_layout_reallocation(rgt_mat_copy, params_right);
+    DoubleBlockReallocationInfo* right_double_realloc_info =
+        standard_to_double_block_layout_reallocation(rgt_mat, params_right);
     time_ = (clock() - time_) / (1.0 * CLOCKS_PER_SEC);
-    fprintf(log_file, "[ %lf  секунд ]\n", time_);
+    fprintf(log_file, "[ %.3lf секунд ]\n", time_);
     if (console_info_output)
     {
-        printf("[ %lf  секунд ]\n", time_);
+        printf("[ %.3lf секунд ]\n", time_);
     }
 
     fprintf(log_file, "  > Блочное умножение матриц (двойной тайлинг)...  ");
@@ -399,21 +421,223 @@ void matrix_multiplication_tests(const TaskClass& params_left,
         printf("  > Блочное умножение матриц (двойной тайлинг)...  ");
     }
     time_ = clock();
-    block_matrix_multiplication_double_tiled(gen_mat, left_mat_copy, rgt_mat_copy,
+    block_matrix_multiplication_double_tiled(gen_mat, left_mat, rgt_mat,
                                              params_left, params_right);
     time_ = (clock() - time_) / (1.0 * CLOCKS_PER_SEC);
-    fprintf(log_file, "[ %lf  секунд ]\n\n", time_);
+    fprintf(log_file, "[ %.3lf секунд ]\n", time_);
     if (console_info_output)
     {
-        printf("[ %lf  секунд ]\n\n", time_);
+        printf("[ %.3lf секунд ]\n", time_);
+    }
+
+    fprintf(log_file, "  > Обратное переразмещение...                     ");
+    if (console_info_output)
+    {
+        printf("  > Обратное переразмещение...                     ");
+    }
+    time_ = clock();
+    //    block_to_standard_layout_reallocation(gen_mat, );
+    double_block_to_standard_layout_reallocation(left_mat, left_double_realloc_info);
+    double_block_to_standard_layout_reallocation(rgt_mat, right_double_realloc_info);
+    time_ = (clock() - time_) / (1.0 * CLOCKS_PER_SEC);
+    fprintf(log_file, "[ %.3lf секунд ]\n\n", time_);
+    if (console_info_output)
+    {
+        printf("[ %.3lf секунд ]\n\n", time_);
+    }
+        
+    fclose(log_file);
+}
+
+void floyd_test(const TaskClass& parameters,
+                const bool console_info_output)
+{
+    const int N = parameters.getDataRef().M_ROWS;
+    const int B = parameters.getDataRef().B_ROWS;
+
+    FILE* log_file;
+    fopen_s(&log_file, "../floyd_test_log.txt", "a");
+
+    fprintf(log_file, " [> Запуск тестов для параметров:\n");
+    fprintf(log_file, "    N = %5d\n", N);
+    fprintf(log_file, "    B = %3d\n", B);
+
+    if (console_info_output)
+    {
+        printf(" [> Запуск тестов для параметров:\n");
+        printf("    N = %5d\n", N);
+        printf("    B = %3d\n", B);
+    }
+
+    double* matrix = new double[N*N];
+    double* standard = new double[N*N];
+    double* matrix_copy = new double[N*N];
+    
+    const double memory_val = (24.0 * N*N) / (1024 * 1024);
+    fprintf(log_file, "  > Объем выделенной памяти:   [ %.2lf Мб ]\n", memory_val);
+    fprintf(log_file, "    ---------------------------------------------------------------\n");
+    if (console_info_output)
+    {
+        printf("  > Объем выделенной памяти:   [ %.2lf Мб ]\n", memory_val);
+        printf("    ---------------------------------------------------------------\n");
+    }
+
+    fprintf(log_file, "  > Заполнение массива...                          ");
+    if (console_info_output)
+    {
+        printf("  > Заполнение массива...                          ");
+    }
+    double time_ = clock();
+    generate(matrix, N, N);
+    time_ = (clock() - time_) / (1.0 * CLOCKS_PER_SEC);
+    fprintf(log_file, "[ %.3lf секунд ]\n", time_);
+    if (console_info_output)
+    {
+        printf("[ %.3lf секунд ]\n", time_);
+    }
+
+    memcpy(matrix_copy, matrix, sizeof(double)*N*N);
+    memcpy(standard,    matrix, sizeof(double)*N*N);
+
+    fprintf(log_file, "  > Стандартный алгоритм Флойда...                 ");
+    if (console_info_output)
+    {
+        printf("  > Стандартный алгоритм Флойда...                 ");
+    }
+    time_ = clock();
+    floyd_standard(standard, N);
+    time_ = (clock() - time_) / (1.0 * CLOCKS_PER_SEC);
+    fprintf(log_file, "[ %.3lf секунд ]\n", time_);
+    if (console_info_output)
+    {
+        printf("[ %.3lf секунд ]\n", time_);
+    }
+
+    fprintf(log_file, "  > Алгоритм Флойда (тайлинг)...                   ");
+    if (console_info_output)
+    {
+        printf("  > Алгоритм Флойда (тайлинг)...                   ");
+    }
+    time_ = clock();
+    floyd_tiled(matrix, N, B);
+    time_ = (clock() - time_) / (1.0 * CLOCKS_PER_SEC);
+    fprintf(log_file, "[ %.3lf секунд ]\n", time_);
+    if (console_info_output)
+    {
+        printf("[ %.3lf секунд ]\n", time_);
+    }
+    
+    fprintf(log_file, "  > Блочное переразмещение...                      ");
+    if (console_info_output)
+    {
+        printf("  > Блочное переразмещение...                      ");
+    }
+    time_ = clock();
+    BlockReallocationInfo* realloc_info =
+        standard_to_block_layout_reallocation(matrix_copy, parameters);
+    time_ = (clock() - time_) / (1.0 * CLOCKS_PER_SEC);
+    fprintf(log_file, "[ %.3lf секунд ]\n", time_);
+    if (console_info_output)
+    {
+        printf("[ %.3lf секунд ]\n", time_);
+    }
+    
+    fprintf(log_file, "  > Блочный алгоритм Флойда...                      ");
+    if (console_info_output)
+    {
+        printf("  > Блочный алгоритм Флойда...                     ");
+    }
+    time_ = clock();
+    block_floyd_tiled(matrix_copy, N, B);
+    time_ = (clock() - time_) / (1.0 * CLOCKS_PER_SEC);
+    fprintf(log_file, "[ %.3lf секунд ]\n", time_);
+    if (console_info_output)
+    {
+        printf("[ %.3lf секунд ]\n", time_);
+    }
+
+    fprintf(log_file, "  > Обратное переразмещение...                     ");
+    if (console_info_output)
+    {
+        printf("  > Обратное переразмещение...                     ");
+    }
+    time_ = clock();
+    block_to_standard_layout_reallocation(matrix_copy, realloc_info);
+    time_ = (clock() - time_) / (1.0 * CLOCKS_PER_SEC);
+    fprintf(log_file, "[ %.3lf секунд ]\n\n", time_);
+    if (console_info_output)
+    {
+        printf("[ %.3lf секунд ]\n\n", time_);
     }
     
     fclose(log_file);
 }
 
+unsigned int select_optimal_block_size_floyd(
+    const unsigned int N,
+    const unsigned int start_block_val,
+    const unsigned int end_block_val,
+    const unsigned int selection_step)
+{
+    double* original = new double[N*N];
+    double* matrix = new double[N*N];
+    
+    const double memory_val = 24.0*N*N / (1024 * 1024);
+    printf("\n [> Объем выделенной памяти:   [ %f Мб ]\n", memory_val);
+
+    generate(original, N, N);
+
+    double min_res_time = DBL_MAX;
+    double min_alg_time = DBL_MAX;
+    double time_, realloc_time, alg_time, res_time;
+    unsigned int optimal_by_whole_time = start_block_val;
+    unsigned int optimal_by_alg_time = start_block_val;
+
+    printf("\n [> Подбор размера блока (алгоритм Флойда)...\n");
+    printf("    Параметры: Размер матрицы = %d, перебор от %d до %d с шагом %d\n",
+        N, start_block_val, end_block_val, selection_step);
+    for (unsigned int block_size = start_block_val; block_size <= end_block_val; block_size += selection_step)
+    {
+        memcpy(matrix, original, N*N*sizeof(double));
+
+        TaskClass task_data;
+        task_data.makeData(N, N, block_size, block_size);
+
+        time_ = clock();
+        standard_to_block_layout_reallocation(matrix, task_data);
+        realloc_time = (clock() - time_) / (1.0 * CLOCKS_PER_SEC);
+
+        time_ = clock();
+        block_floyd_tiled(matrix, N, block_size);
+        alg_time = (clock() - time_) / (1.0 * CLOCKS_PER_SEC);
+        res_time = alg_time + realloc_time;
+
+        printf("  > B = %d, AT = %f сек, RT = %f сек, WT = %f сек\n",
+            block_size, alg_time, realloc_time, res_time);
+
+        if (res_time < min_res_time)
+        {
+            min_res_time = res_time;
+            optimal_by_whole_time = block_size;
+        }
+        if (alg_time < min_alg_time)
+        {
+            min_alg_time = alg_time;
+            optimal_by_alg_time = block_size;
+        }
+    }
+    printf("  -----------------------------------------------------------------\n");
+    printf("  > OPTIMAL BLOCK SIZE: BY MT = %d, BY WT = %d\n\n", optimal_by_alg_time, optimal_by_whole_time);
+
+    delete[] matrix;
+    delete[] original;
+
+    return optimal_by_alg_time;
+}
+
 void correctness_test(const TaskClass& params_left,
     const TaskClass& params_right,
-    const bool       console_info_output = false)
+    const bool       console_info_output)
 {
 
 }

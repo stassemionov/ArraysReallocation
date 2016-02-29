@@ -157,15 +157,19 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="floydalg.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="multiplication.cpp" />
+    <ClCompile Include="qralg.cpp" />
     <ClCompile Include="reallocation.cpp" />
     <ClCompile Include="service.cpp" />
     <ClCompile Include="taskdata.cpp" />
     <ClCompile Include="testing.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="floydalg.h" />
     <ClInclude Include="multiplication.h" />
+    <ClInclude Include="qralg.h" />
     <ClInclude Include="reallocation.h" />
     <ClInclude Include="service.h" />
     <ClInclude Include="taskdata.h" />

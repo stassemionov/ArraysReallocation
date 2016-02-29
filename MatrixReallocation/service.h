@@ -1,11 +1,14 @@
 ﻿#ifndef _SERVICE_H_
 #define _SERVICE_H_
 
+#include "taskdata.h"
+
 #include <iostream>
 #include <vector>
 
 using std::ostream;
 using std::vector;
+using std::string;
 
 // Generate M x N matrix. Elements are between lbound and ubound
 double* generate(double* data_ptr, const int rows_count, const int cols_count,
@@ -30,5 +33,10 @@ int gcd(const int u, const int v);
 // return true or false
 bool m_find(const int& val, const vector<int>& vec);
 
+TaskClass* read_multiplication_parameters(const string& file_name = "../mult_parameters.txt");
+
+TaskClass* read_reallocation_test_parameters(const string& file_name = "../realloc_parameters.txt");
+
+TaskClass* read_floyd_algorythm_parameters(const string& file_name = "../floyd_parameters.txt");
 
 #endif  // _SERVICE_H_

@@ -1,9 +1,11 @@
 ﻿#include "service.h"
 
 #include <iomanip>
+#include <fstream>
 
 using std::setw;
 using std::vector;
+using std::ifstream;
 
 double* generate(double* data_ptr, const int rows_count, const int cols_count,
     const double lbound, const double ubound)
@@ -116,4 +118,82 @@ bool m_find(const int& val, const vector<int>& vec)
         }
     }
     return vec[r] == val;
+}
+
+// Writes task parameters from file with name 'file_name'.
+// Returns 3-element dynamic array of TaskClass objects,
+// containing elements in following order:
+// left matrix parameters, right matrix parameters, generator matrix parameters
+TaskClass* read_multiplication_parameters(const string& file_name)
+{
+    // Task paramers file needs to have structure as follows:
+    // <number of rows         in left       matrix>                  ['\n' | ' ']+
+    // <number of columns/rows in left/rigth matrix>                  ['\n' | ' ']+
+    // <number of columns      in right      matrix>                  ['\n' | ' ']+
+    // <number of rows         in main block of left       matrix>    ['\n' | ' ']+
+    // <number of columns/rows in main block of left/right matrix>    ['\n' | ' ']+
+    // <number of columns      in main block of right      matrix>    ['\n' | ' ']+
+    // <number of rows         in small block of left       matrix>   ['\n' | ' ']+
+    // <number of columns/rows in small block of left/right matrix>   ['\n' | ' ']+
+    // <number of rows         in small block of right      matrix>   ['\n' | ' ']+ <anything>
+
+    ifstream file;
+    file.open(file_name);
+
+    int N1, N2, N3, b1, b2, b3, db1, db2, db3;
+    file >> N1 >> N2 >> N3 >> b1 >> b2 >> b3 >> db1 >> db2 >> db3;
+    file.close();
+    
+    TaskClass* params = new TaskClass[3];
+    params[0].makeData(N1, N2, b1, b2, db1, db2);
+    params[1].makeData(N2, N3, b2, b3, db2, db3);
+    params[2].makeData(N1, N3, b1, b3, db1, db3);
+
+    return params;
+}
+
+// Writes task parameters from file with name 'file_name'.
+// Returns pointer to dynamic-allocated TaskClass object
+TaskClass* read_reallocation_test_parameters(const string& file_name)
+{
+    // Task paramers file needs to have structure as follows:
+    // <number of rows    in matrix>                  ['\n' | ' ']+
+    // <number of columns in matrix>                  ['\n' | ' ']+
+    // <number of rows    in main block of matrix>    ['\n' | ' ']+
+    // <number of columns in main block of matrix>    ['\n' | ' ']+
+    // <number of rows    in small block of matrix>   ['\n' | ' ']+
+    // <number of rows    in small block of matrix>   ['\n' | ' ']+ <anything>
+
+    ifstream file;
+    file.open(file_name);
+
+    int N1, N2, b1, b2, db1, db2;
+    file >> N1 >> N2 >> b1 >> b2 >> db1 >> db2;
+    file.close();
+
+    TaskClass* params = new TaskClass;
+    params->makeData(N1, N2, b1, b2, db1, db2);
+
+    return params;
+}
+
+// Writes task parameters from file with name 'file_name'.
+// Returns pointer to dynamic-allocated TaskClass object
+TaskClass* read_floyd_algorythm_parameters(const string& file_name)
+{
+    // Task paramers file needs to have structure as follows:
+    // <number of rows/columns in matrix>   ['\n' | ' ']+
+    // <number of rows in block of matrix>  ['\n' | ' ']+ <anything>
+    
+    ifstream file;
+    file.open(file_name);
+
+    int N, b;
+    file >> N >> b;
+    file.close();
+
+    TaskClass* params = new TaskClass;
+    params->makeData(N, N, b, b);
+
+    return params;
 }
