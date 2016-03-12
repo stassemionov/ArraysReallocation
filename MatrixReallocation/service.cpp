@@ -197,3 +197,28 @@ TaskClass* read_floyd_algorythm_parameters(const string& file_name)
 
     return params;
 }
+
+// Writes task parameters from file with name 'file_name'.
+// Returns pointer to dynamic-allocated TaskClass object
+TaskClass* read_qr_parameters(const string& file_name)
+{
+    // Task paramers file needs to have structure as follows:
+    // <number of rows/columns in matrix>                  ['\n' | ' ']+
+    // <number of rows         in main block of matrix>    ['\n' | ' ']+
+    // <number of columns      in main block of matrix>    ['\n' | ' ']+
+    // <number of rows         in small block of matrix>   ['\n' | ' ']+
+    // <number of columns      in small block of matrix>   ['\n' | ' ']+ <anything>
+
+    ifstream file;
+    file.open(file_name);
+
+    int N, b1, b2, db1, db2;
+    file >> N >> b1 >> b2 >> db1 >> db2;
+    file.close();
+
+    TaskClass* params = new TaskClass;
+    params->makeData(N, N, b1, b2, db1, db2);
+
+    return params;
+}
+

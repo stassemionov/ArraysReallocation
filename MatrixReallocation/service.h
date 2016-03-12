@@ -39,4 +39,6 @@ TaskClass* read_reallocation_test_parameters(const string& file_name = "../reall
 
 TaskClass* read_floyd_algorythm_parameters(const string& file_name = "../floyd_parameters.txt");
 
+TaskClass* read_qr_parameters(const string& file_name = "../qr_parameters.txt");
+
 #endif  // _SERVICE_H_
