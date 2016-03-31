@@ -239,18 +239,18 @@ void matrix_multiplication_tests(const TaskClass& params_left,
 
     fprintf(log_file, "\n [> Запуск тестов для параметров:\n");
     fprintf(log_file, "    N1 = %5d, N2 = %5d, N3 = %5d\n", N1, N2, N3);
-    fprintf(log_file, "    B1 = %3d, B2 = %3d, B3 = %3d\n",
+    fprintf(log_file, "    B1 = %5d, B2 = %5d, B3 = %5d\n",
         params_left.getDataRef().B_ROWS, params_left.getDataRef().B_COLS, params_right.getDataRef().B_COLS);
-    fprintf(log_file, "    D1 = %3d, D2 = %3d, D3 = %3d\n",
+    fprintf(log_file, "    D1 = %5d, D2 = %5d, D3 = %5d\n",
         params_left.getDataRef().D_ROWS, params_left.getDataRef().D_COLS, params_right.getDataRef().D_COLS);
 
     if (console_info_output)
     {
         printf("\n\n [> Запуск тестов для параметров:\n");
         printf("    N1 = %5d, N2 = %5d, N3 = %5d\n", N1, N2, N3);
-        printf("    B1 = %3d, B2 = %3d, B3 = %3d\n",
+        printf("    B1 = %5d, B2 = %5d, B3 = %5d\n",
            params_left.getDataRef().B_ROWS, params_left.getDataRef().B_COLS, params_right.getDataRef().B_COLS);
-        printf("    D1 = %3d, D2 = %3d, D3 = %3d\n",
+        printf("    D1 = %5d, D2 = %5d, D3 = %5d\n",
             params_left.getDataRef().D_ROWS, params_left.getDataRef().D_COLS, params_right.getDataRef().D_COLS);
     }
 
@@ -326,7 +326,7 @@ void matrix_multiplication_tests(const TaskClass& params_left,
         printf("    Левая матрица...                               ");
     }
     time_ = clock();
-    BlockReallocationInfo* left_realloc_info = 
+    const BlockReallocationInfo* left_realloc_info = 
         standard_to_block_layout_reallocation(left_mat, params_left);
     time_ = (clock() - time_) / (1.0 * CLOCKS_PER_SEC);
     fprintf(log_file, "[ %.3lf секунд ]\n", time_);
@@ -341,7 +341,7 @@ void matrix_multiplication_tests(const TaskClass& params_left,
         printf("    Правая матрица...                              ");
     }
     time_ = clock();
-    BlockReallocationInfo* right_realloc_info =
+    const BlockReallocationInfo* right_realloc_info =
         standard_to_block_layout_reallocation(rgt_mat, params_right);
     time_ = (clock() - time_) / (1.0 * CLOCKS_PER_SEC);
     fprintf(log_file, "[ %.3lf секунд ]\n", time_);
@@ -374,8 +374,8 @@ void matrix_multiplication_tests(const TaskClass& params_left,
     }
     time_ = clock();
 //    block_to_standard_layout_reallocation(gen_mat, );
-    block_to_standard_layout_reallocation(left_mat, left_realloc_info);
-    block_to_standard_layout_reallocation(rgt_mat, right_realloc_info);
+    block_to_standard_layout_reallocation(left_mat, *left_realloc_info);
+    block_to_standard_layout_reallocation(rgt_mat, *right_realloc_info);
     time_ = (clock() - time_) / (1.0 * CLOCKS_PER_SEC);
     fprintf(log_file, "[ %.3lf секунд ]\n", time_);
     if (console_info_output)
@@ -391,7 +391,7 @@ void matrix_multiplication_tests(const TaskClass& params_left,
         printf("    Левая матрица...                               ");
     }
     time_ = clock();
-    DoubleBlockReallocationInfo* left_double_realloc_info =
+    const DoubleBlockReallocationInfo* left_double_realloc_info =
         standard_to_double_block_layout_reallocation(left_mat, params_left);
     time_ = (clock() - time_) / (1.0 * CLOCKS_PER_SEC);
     fprintf(log_file, "[ %.3lf секунд ]\n", time_);
@@ -406,7 +406,7 @@ void matrix_multiplication_tests(const TaskClass& params_left,
         printf("    Правая матрица...                              ");
     }
     time_ = clock();
-    DoubleBlockReallocationInfo* right_double_realloc_info =
+    const DoubleBlockReallocationInfo* right_double_realloc_info =
         standard_to_double_block_layout_reallocation(rgt_mat, params_right);
     time_ = (clock() - time_) / (1.0 * CLOCKS_PER_SEC);
     fprintf(log_file, "[ %.3lf секунд ]\n", time_);
@@ -437,8 +437,8 @@ void matrix_multiplication_tests(const TaskClass& params_left,
     }
     time_ = clock();
     //    block_to_standard_layout_reallocation(gen_mat, );
-    double_block_to_standard_layout_reallocation(left_mat, left_double_realloc_info);
-    double_block_to_standard_layout_reallocation(rgt_mat, right_double_realloc_info);
+    double_block_to_standard_layout_reallocation(left_mat, *left_double_realloc_info);
+    double_block_to_standard_layout_reallocation(rgt_mat, *right_double_realloc_info);
     time_ = (clock() - time_) / (1.0 * CLOCKS_PER_SEC);
     fprintf(log_file, "[ %.3lf секунд ]\n\n", time_);
     if (console_info_output)
@@ -447,6 +447,10 @@ void matrix_multiplication_tests(const TaskClass& params_left,
     }
         
     fclose(log_file);
+
+    delete[] left_mat;
+    delete[] rgt_mat;
+    delete[] gen_mat;
 }
 
 void floyd_test(const TaskClass& parameters,
@@ -460,13 +464,13 @@ void floyd_test(const TaskClass& parameters,
 
     fprintf(log_file, " [> Запуск тестов для параметров:\n");
     fprintf(log_file, "    N = %5d\n", N);
-    fprintf(log_file, "    B = %3d\n", B);
+    fprintf(log_file, "    B = %5d\n", B);
 
     if (console_info_output)
     {
         printf(" [> Запуск тестов для параметров:\n");
         printf("    N = %5d\n", N);
-        printf("    B = %3d\n", B);
+        printf("    B = %5d\n", B);
     }
 
     double* matrix = new double[N*N];
@@ -533,7 +537,7 @@ void floyd_test(const TaskClass& parameters,
         printf("  > Блочное переразмещение...                      ");
     }
     time_ = clock();
-    BlockReallocationInfo* realloc_info =
+    const BlockReallocationInfo* realloc_info =
         standard_to_block_layout_reallocation(matrix_copy, parameters);
     time_ = (clock() - time_) / (1.0 * CLOCKS_PER_SEC);
     fprintf(log_file, "[ %.3lf секунд ]\n", time_);
@@ -562,7 +566,7 @@ void floyd_test(const TaskClass& parameters,
         printf("  > Обратное переразмещение...                     ");
     }
     time_ = clock();
-    block_to_standard_layout_reallocation(matrix_copy, realloc_info);
+    block_to_standard_layout_reallocation(matrix_copy, *realloc_info);
     time_ = (clock() - time_) / (1.0 * CLOCKS_PER_SEC);
     fprintf(log_file, "[ %.3lf секунд ]\n\n", time_);
     if (console_info_output)
@@ -571,6 +575,10 @@ void floyd_test(const TaskClass& parameters,
     }
     
     fclose(log_file);
+
+    delete[] matrix;
+    delete[] standard;
+    delete[] matrix_copy;
 }
 
 unsigned int select_optimal_block_size_floyd(
@@ -635,9 +643,121 @@ unsigned int select_optimal_block_size_floyd(
     return optimal_by_alg_time;
 }
 
-void correctness_test(const TaskClass& params_left,
-    const TaskClass& params_right,
-    const bool       console_info_output)
+void reallocation_test(const TaskClass& parameters,
+                       const bool console_info_output)
 {
+    const int N1 = parameters.getDataRef().M_ROWS;
+    const int N2 = parameters.getDataRef().M_COLS;
+    const int B1 = parameters.getDataRef().B_ROWS;
+    const int B2 = parameters.getDataRef().B_COLS;
+    const int D1 = parameters.getDataRef().D_ROWS;
+    const int D2 = parameters.getDataRef().D_COLS;
 
+    FILE* log_file;
+    fopen_s(&log_file, "../reallocation_test_log.txt", "a");
+
+    fprintf(log_file, "\n [> Запуск тестов для параметров:\n");
+    fprintf(log_file, "    N1 = %5d, N2 = %5d\n", N1, N2);
+    fprintf(log_file, "    B1 = %5d, B2 = %5d\n", B1, B2);
+    fprintf(log_file, "    D1 = %5d, D2 = %5d\n", D1, D2);
+
+    if (console_info_output)
+    {
+        printf("\n [> Запуск тестов для параметров:\n");
+        printf("    N1 = %5d, N2 = %5d\n", N1, N2);
+        printf("    B1 = %5d, B2 = %5d\n", B1, B2);
+        printf("    D1 = %5d, D2 = %5d\n", D1, D2);
+    }
+
+    double* mat1 = new double[N1*N2];
+
+    const double memory_val = (8.0 * N1*N2) / (1024 * 1024);
+    fprintf(log_file, "  > Объем выделенной памяти:   [ %.2lf Мб ]\n", memory_val);
+    fprintf(log_file, "    ---------------------------------------------------------------\n");
+    if (console_info_output)
+    {
+        printf("  > Объем выделенной памяти:   [ %.2lf Мб ]\n", memory_val);
+        printf("    ---------------------------------------------------------------\n");
+    }
+
+    fprintf(log_file, "  > Заполнение массива...                          ");
+    if (console_info_output)
+    {
+        printf("  > Заполнение массива...                          ");
+    }
+    double time_ = clock();
+    generate(mat1, N1, N2);
+    time_ = (clock() - time_) / (1.0 * CLOCKS_PER_SEC);
+    fprintf(log_file, "[ %.3lf секунд ]\n", time_);
+    if (console_info_output)
+    {
+        printf("[ %.3lf секунд ]\n", time_);
+    }
+
+    double* mat2 = new double[N1*N2];
+    memcpy(mat2, mat1, N1*N2*sizeof(double));
+
+    fprintf(log_file, "  > Блочное переразмещение...                      ");
+    if (console_info_output)
+    {
+        printf("  > Блочное переразмещение...                      ");
+    }
+    time_ = clock();
+    const BlockReallocationInfo* block_realloc_info =
+        standard_to_block_layout_reallocation(mat1, parameters);
+    time_ = (clock() - time_) / (1.0 * CLOCKS_PER_SEC);
+    fprintf(log_file, "[ %.3lf секунд ]\n", time_);
+    if (console_info_output)
+    {
+        printf("[ %.3lf секунд ]\n", time_);
+    }
+
+    fprintf(log_file, "  > Обратное переразмещение...                     ");
+    if (console_info_output)
+    {
+        printf("  > Обратное переразмещение...                     ");
+    }
+    time_ = clock();
+    block_to_standard_layout_reallocation(mat1, *block_realloc_info);
+    time_ = (clock() - time_) / (1.0 * CLOCKS_PER_SEC);
+    fprintf(log_file, "[ %.3lf секунд ]\n", time_);
+    if (console_info_output)
+    {
+        printf("[ %.3lf секунд ]\n", time_);
+    }
+
+    fprintf(log_file, "  > Двойное блочное переразмещение...              ");
+    if (console_info_output)
+    {
+        printf("  > Двойное блочное переразмещение...              ");
+    }
+    time_ = clock();
+    const DoubleBlockReallocationInfo* double_block_realloc_info =
+        standard_to_double_block_layout_reallocation(mat1, parameters);
+    time_ = (clock() - time_) / (1.0 * CLOCKS_PER_SEC);
+    fprintf(log_file, "[ %.3lf секунд ]\n", time_);
+    if (console_info_output)
+    {
+        printf("[ %.3lf секунд ]\n", time_);
+    }
+
+    fprintf(log_file, "  > Обратное переразмещение...                     ");
+    if (console_info_output)
+    {
+        printf("  > Обратное переразмещение...                     ");
+    }
+    time_ = clock();
+    double_block_to_standard_layout_reallocation(mat1, *double_block_realloc_info);
+    time_ = (clock() - time_) / (1.0 * CLOCKS_PER_SEC);
+    fprintf(log_file, "[ %.3lf секунд ]\n\n", time_);
+    if (console_info_output)
+    {
+        printf("[ %.3lf секунд ]\n\n", time_);
+    }
+
+    std::cout << compare_arrays(mat1, mat2, N1*N2) << std::endl;
+
+    fclose(log_file);
+
+    delete[] mat1;
 }

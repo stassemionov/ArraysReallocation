@@ -11,6 +11,10 @@ double* QR_WY_standard(double* A, const int N, const int r);
 double* QR_WY_tiled(double* A, const TaskData& parameters);
 
 // QR-алгоритм с WY-разложением.
+// Умножения матриц производятся с двойным тайлингом.
+double* QR_WY_double_tiled(double* A, const TaskData& parameters);
+
+// QR-алгоритм с WY-разложением.
 // Матрица А предполагается размещенной блочно.
 double* QR_WY_block(double* A, const TaskData& parameters);
 

@@ -31,7 +31,7 @@ int gcd(const int u, const int v);
 
 // Search 'val' in vector 'vec' with binary search,
 // return true or false
-bool m_find(const int& val, const vector<int>& vec);
+bool m_find(const int val, const vector<int>& vec);
 
 TaskClass* read_multiplication_parameters(const string& file_name = "../mult_parameters.txt");
 

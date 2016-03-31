@@ -22,8 +22,10 @@ struct TaskData
     int M_BLOCK_COLS;       // число блоков в направлении строки
     int DIF_ROWS;           // смещение сетки по столбцу
     int DIF_COLS;           // смещение сетки по строке
+    int MAIN_COLS;
     int STRIPE_SIZE;
     int BLOCK_SIZE;
+    int TRUNC_STRIPE_SIZE;
 };
 
 class TaskClass
@@ -49,8 +51,8 @@ public:
     // ѕринимает на вход адрес элемента в массиве со строчным размещением,
     // возвращает адрес этого элемента в массиве с двойным блочным размещением,
     // задаваемым набором параматров 'data'
-    inline int indexFunctionDbl(const int& i_index,
-                                const int& j_index) const
+    inline int indexFunctionDbl(const int i_index,
+                                const int j_index) const
     {
         //  оординаты текущего большого блока
         const int&& b_row = i_index / m_data.B_ROWS;
@@ -111,7 +113,7 @@ public:
     // ѕринимает на вход адрес элемента в массиве со строчным размещением,
     // возвращает адрес этого элемента в массиве с блочным размещением,
     // определ€емым параметрами данного класса
-    inline int indexFunction(const int& index) const
+    inline int _fastcall indexFunction(const int index) const
     {
         // –азложение адреса на строчную и столбцовую составл€ющие
         const int&& index_i = index / m_data.M_COLS;
@@ -149,33 +151,34 @@ public:
     // возвращает адрес этого элемента в массиве с блочным размещением,
     // определ€емым параметрами данного класса,
     // при условии, что передан адрес элемента первой полосы блоков
-    inline int indexFunctionReduced(const int& index) const
+    inline int _fastcall indexFunctionReduced(const int index) const
     {
         const int&& i_col = index % m_data.M_COLS;
       //  const int& curr_block_width = 
       //      (i_col < m_data.M_COLS - m_data.DIF_COLS) ?
       //      m_data.B_COLS : m_data.DIF_COLS;
 
-        if (i_col < m_data.M_COLS - m_data.DIF_COLS)
+        if (i_col < m_data.MAIN_COLS)
         {
-            return m_data.B_ROWS * m_data.B_COLS * (i_col / m_data.B_COLS) +
+            return m_data.BLOCK_SIZE * (i_col / m_data.B_COLS) +
                 m_data.B_COLS * (index / m_data.M_COLS) +
                 i_col % m_data.B_COLS;
         }
         else
         {
-            return m_data.B_ROWS * m_data.B_COLS * (i_col / m_data.B_COLS) +
+            return m_data.BLOCK_SIZE * (i_col / m_data.B_COLS) +
                 m_data.DIF_COLS * (index / m_data.M_COLS) +
                 i_col % m_data.B_COLS;
         }
     }
 
-    inline int indexFunctionReducedInverse(const int& index) const
+    inline int _fastcall indexFunctionReducedInverse(const int index) const
     {
         const int&& block_number = index / m_data.BLOCK_SIZE;
         const int&& local_shift = index % m_data.BLOCK_SIZE;
-        
-        if (m_data.STRIPE_SIZE - m_data.BLOCK_SIZE * block_number < m_data.BLOCK_SIZE)
+
+        // if (m_data.STRIPE_SIZE - m_data.BLOCK_SIZE * block_number < m_data.BLOCK_SIZE)
+        if (m_data.TRUNC_STRIPE_SIZE < m_data.BLOCK_SIZE * block_number)
         {
             //local_i = local_shift / m_data.DIF_COLS;
             //local_j = local_shift % m_data.DIF_COLS;
@@ -214,11 +217,11 @@ struct BlockReallocationInfo
 
 struct DoubleBlockReallocationInfo
 {
-    BlockReallocationInfo* upper_level_realloc_info = NULL;
-    BlockReallocationInfo* main_realloc_info = NULL;
-    BlockReallocationInfo* right_realloc_info = NULL;
-    BlockReallocationInfo* bottom_realloc_info = NULL;
-    BlockReallocationInfo* corner_realloc_info = NULL;
+    const BlockReallocationInfo* upper_level_realloc_info = NULL;
+    const BlockReallocationInfo* main_realloc_info = NULL;
+    const BlockReallocationInfo* right_realloc_info = NULL;
+    const BlockReallocationInfo* bottom_realloc_info = NULL;
+    const BlockReallocationInfo* corner_realloc_info = NULL;
 };
 
 #endif  // _TASKDATA_H_

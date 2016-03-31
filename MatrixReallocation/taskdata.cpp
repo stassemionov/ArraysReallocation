@@ -25,8 +25,10 @@ TaskClass::TaskClass(const int& rows_count, const int& cols_count,
     m_data.M_BLOCK_COLS = static_cast<int>(ceil(1.0 * m_data.M_COLS / m_data.B_COLS));
     m_data.DIF_COLS = m_data.M_COLS % m_data.B_COLS;
     m_data.DIF_ROWS = m_data.M_ROWS % m_data.B_ROWS;
+    m_data.MAIN_COLS = m_data.M_COLS - m_data.DIF_COLS;
     m_data.STRIPE_SIZE = m_data.B_ROWS * m_data.M_COLS;
     m_data.BLOCK_SIZE = m_data.B_ROWS * m_data.B_COLS;
+    m_data.TRUNC_STRIPE_SIZE = m_data.STRIPE_SIZE - m_data.BLOCK_SIZE;
 }
 
 void TaskClass::makeData(const int& rows_count, const int& cols_count,
@@ -46,8 +48,10 @@ void TaskClass::makeData(const int& rows_count, const int& cols_count,
     m_data.M_BLOCK_COLS = static_cast<int>(ceil(1.0 * m_data.M_COLS / m_data.B_COLS));
     m_data.DIF_COLS = m_data.M_COLS % m_data.B_COLS;
     m_data.DIF_ROWS = m_data.M_ROWS % m_data.B_ROWS;
+    m_data.MAIN_COLS = m_data.M_COLS - m_data.DIF_COLS;
     m_data.STRIPE_SIZE = m_data.B_ROWS * m_data.M_COLS;
     m_data.BLOCK_SIZE = m_data.B_ROWS * m_data.B_COLS;
+    m_data.TRUNC_STRIPE_SIZE = m_data.STRIPE_SIZE - m_data.BLOCK_SIZE;
 }
 
 const TaskData& TaskClass::getDataRef() const

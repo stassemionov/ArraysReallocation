@@ -87,7 +87,7 @@ int gcd(const int u, const int v)
     return gcd((v - u) >> 1, u);
 }
 
-bool m_find(const int& val, const vector<int>& vec)
+bool m_find(const int val, const vector<int>& vec)
 {
     if (vec.empty())
     {
@@ -107,7 +107,7 @@ bool m_find(const int& val, const vector<int>& vec)
     int m = 0;
     while (l < r)
     {
-        m = (l + r) / 2;
+        m = (l + r) >> 1;
         if (vec[m] < val)
         {
             l = m + 1;

@@ -7,6 +7,259 @@ using std::min;
 using std::max;
 using std::swap;
 
+double* QR_WY_double_tiled(double* A, const TaskData& parameters)
+{
+    const int N = parameters.M_ROWS;
+    const int b1 = parameters.B_ROWS;
+    const int b2 = parameters.B_COLS;
+    const int db1 = parameters.D_ROWS;
+    const int db2 = parameters.D_COLS;
+
+    double* v = new double[N];
+    double* w = new double[N];
+    double* W = new double[N * b2];
+    double* Y = new double[N * b2];
+    double* WY = new double[N * N];
+    double* Abuf = new double[N * N];
+
+    // lambda указывает на начало текущего блока
+    for (int lambda = 0; lambda < N; lambda += b2)
+    {
+        // Указывает на начало следующего блока за текущим
+        const int t = min(lambda + b2, N);
+        const int alloc_size = (N - lambda)*sizeof(double);
+        const int row_b_count = static_cast<int>(ceil(1.0 * (N - t) / b2));
+        const int col_b_count = static_cast<int>(ceil(1.0 * (N - lambda) / b1));
+
+        // Выполнение преобразований над текущим блоком
+        for (int it = lambda; it < t; ++it)
+        {
+            // ничего, если занулятся несколько лишних коодинат
+            memset(w + lambda, 0, alloc_size);
+
+            double norm = 0;
+            double scalar = 1;
+            double buf;
+            // * Вычисление вектора Хаусхолдера
+            for (int j = it; j < N; ++j)
+            {
+                buf = A[j * N + it];
+                v[j] = buf;
+                norm += buf * buf;
+            }
+            const double A_diag_el = A[it * N + it];
+            double beta = A_diag_el + A_diag_el / abs(A_diag_el) * sqrt(norm);
+            // используется нормировка, т.ч. v[it] = 1
+            for (int j = it + 1; j < N; ++j)
+            {
+                buf = (v[j] /= beta);
+                scalar += buf * buf;
+            }
+            v[it] = 1.0;
+
+            // * Применение преобразования
+            beta = -2.0 / scalar;
+            // Вычисление вектора w = beta * (A(:,lambda:t-1)^t) * v .
+            // начинаем с it, т.к. it-ая матрица Хаусхолдера действует на матрицу A(it:,it:)
+            for (int kb = 0; kb < col_b_count; ++kb)
+            {
+                const int lb = max(it, lambda + kb*b1);
+                const int ub = min(lambda + (kb + 1)*b1, N);
+                for (int j = it; j < t; ++j)
+                {
+                    double sum = 0;
+                    for (int k = lb; k < ub; ++k)
+                    {
+                        sum += A[k*N + j] * v[k];
+                    }
+                    w[j] += beta * sum;
+                }
+            }
+
+            // Преобразование текущего блока матрицы A
+            // здесь блочность не нужна, она есть по умолчанию
+            for (int j = it; j < N; ++j)
+            {
+                double* Aj = A + j * N;
+                const double vj = v[j];
+                for (int k = it; k < t; ++k)
+                {
+                    Aj[k] += vj * w[k];
+                }
+            }
+
+            // * Заполнение поддиагнальной части it-го столбца матрицы A
+            //   информативной частью вектора Хаусхолдера
+            for (int j = it + 1; j < N; ++j)
+            {
+                A[j*N + it] = v[j];
+            }
+        }// FOR
+
+         // * Вычисление WY-представления произведения матриц Хаусхолдера
+        const int d = t - lambda;
+        for (int it = 0; it < d; ++it)
+        {
+            const int shift = lambda + it;
+            double scalar = 1, buf;
+            // * Вычисление нормы и ск. произведения вектора Хаусхолдера
+            for (int j = shift + 1; j < N; ++j)
+            {
+                buf = A[j * N + shift];
+                scalar += buf * buf;
+                v[j] = buf;
+            }
+            v[shift] = 1.0;
+            double beta = -2.0 / scalar;
+
+            // it - число накопленных столбцов в матрицах W и Y (= номеру дозаписываемого столбца)
+            if (it == 0)
+            {
+                // Начальное заполнение первого столбца
+                // замечание: первые lambda строк матриц W и Y - нулевые,
+                //            матрицы имеют ступенчатый вид.
+                for (int i = lambda; i < N; ++i)
+                {
+                    Y[i*b2] = v[i];
+                    W[i*b2] = beta * v[i];
+                }
+            }
+            else
+            {
+                memset(w, 0, d*sizeof(double));
+
+                // Вычисление произведения (Y^t) * v
+                for (int jb = 0; jb < col_b_count; ++jb)
+                {
+                    const int j_lb = max(shift, lambda + jb*b1);
+                    const int j_ub = min(lambda + (jb + 1)*b1, N);
+                    for (int i = 0; i < it; ++i)
+                    {
+                        double sum = 0;
+                        for (int j = j_lb; j < j_ub; ++j)
+                        {
+                            sum += Y[j*b2 + i] * v[j];
+                        }
+                        w[i] += sum;
+                    }
+                }
+
+                // Вычисление произведения W * ((Y^t) * v)
+                // здесь тоже блочность по умолчанию
+                for (int i = lambda; i < N; ++i)
+                {
+                    double* Wi = W + i*b2;
+                    double sum = 0;
+                    for (int j = 0; j < it; ++j)
+                    {
+                        sum += Wi[j] * w[j];
+                    }
+
+                    buf = (i < shift) ? 0 : v[i];
+                    W[i*b2 + it] = beta * (buf + sum);
+                    Y[i*b2 + it] = buf;
+                }
+            }
+        }
+
+        // * Преобразование остальной части матрицы A:
+        // A(lamda:M-1, t:N-1) = (I + W*(Y^t))^t * A(lamda:M-1, t:N-1) (==)
+        // (==) A(lamda:M-1, t:N-1) + [Y*(W^t)] * A(lamda:M-1, t:N-1)
+
+        // Умножение Y * W^t (матрицу WY используем повторно)
+        for (int i = lambda; i < N; ++i)
+        {
+            const int kbound = min(d, i - lambda + 1);
+            double* WYi = WY + i*N;
+            const double* Yi = Y + i*b2;
+            for (int j = lambda; j < N; ++j)
+            {
+                const double* Wj = W + j*b2;
+                double sum = 0;
+                for (int k = 0; k < kbound; ++k)
+                {
+                    sum += Yi[k] * Wj[k];
+                }
+                WYi[j] = sum;
+            }
+        }
+
+        // Умножение A(lamda:M-1, t:N-1) += (Y * W^t) * A(lamda:M-1, t:N-1)
+        for (int ib = 0; ib < col_b_count; ++ib)
+        {
+            const int i_lb = lambda + ib*b1;
+            const int i_ub = min(i_lb + b1, N);
+
+            for (int jb = 0; jb < row_b_count; ++jb)
+            {
+                const int j_lb = t + jb*b2;
+                const int j_ub = min(j_lb + b2, N);
+
+                // Для k = 0 отдельно, чтобы не выполнять проверку
+                // в самом глубоком цикле
+                const int k_lb = lambda;
+                const int k_ub = min(k_lb + b1, N);
+                for (int i = i_lb; i < i_ub; ++i)
+                {
+                    double* Abuf_i = Abuf + i*N;
+                    double* Ai = A + i*N;
+                    const double* WYi = WY + i*N;
+
+                    for (int j = j_lb; j < j_ub; ++j)
+                    {
+                        double sum = Ai[j];
+                        for (int k = k_lb; k < k_ub; ++k)
+                        {
+                            sum += WYi[k] * A[k*N + j];
+                        }
+                        Abuf_i[j] = sum;
+                    }
+                }
+
+                for (int kb = 1; kb < col_b_count; ++kb)
+                {
+                    const int k_lb = lambda + kb*b1;
+                    const int k_ub = min(k_lb + b1, N);
+
+                    for (int i = i_lb; i < i_ub; ++i)
+                    {
+                        double* Abuf_i = Abuf + i*N;
+                        double* Ai = A + i*N;
+                        const double* WYi = WY + i*N;
+
+                        for (int j = j_lb; j < j_ub; ++j)
+                        {
+                            double sum = Abuf_i[j];
+                            for (int k = k_lb; k < k_ub; ++k)
+                            {
+                                sum += WYi[k] * A[k*N + j];
+                            }
+                            Abuf_i[j] = sum;
+                        }
+                    }
+                }
+            }
+        }
+
+        // копирование преобразованной части матрицы A
+        for (int i = lambda; i < N; ++i)
+        {
+            memcpy(A + i*N + t,
+                Abuf + i*N + t,
+                (N - t) * sizeof(double));
+        }
+    }// WHILE
+
+    delete[] v;
+    delete[] w;
+    delete[] W;
+    delete[] Y;
+    delete[] WY;
+    delete[] Abuf;
+
+    return A;
+}
+
 double* QR_WY_tiled(double* A, const TaskData& parameters)
 {
     const int N = parameters.M_ROWS;

@@ -13,12 +13,37 @@ using std::ifstream;
 int main()
 {
     setlocale(LC_ALL, "");
-   
+
 //    const TaskClass* floyd_params   = read_floyd_algorythm_parameters();
-    const TaskClass* qr_params      = read_qr_parameters();
+//    const TaskClass* qr_params      = read_qr_parameters();
 //    const TaskClass* mult_params    = read_multiplication_parameters();
 //    const TaskClass* realloc_params = read_reallocation_test_parameters();
 
+    //reallocation_test(*realloc_params, true);
+
+
+
+    int N1 = 5123;
+    int N2 = 5324;
+    int B1 = 385;
+    int B2 = 571;
+    int D1 = 37;
+    int D2 = 74;
+
+    double* mat = new double[N1*N2];
+    double* mat2 = new double[N1*N2];
+    generate(mat, N1, N2);
+    memcpy(mat2, mat, N1*N2 * sizeof(double));
+
+    double time_ = clock();
+    standard_to_block_layout_reallocation_release(mat, N1, N2, B1, B2);
+    block_to_standard_layout_reallocation_release(mat, N1, N2, B1, B2);
+    time_ = (clock() - time_) / (1.0 * CLOCKS_PER_SEC);
+
+    std::cout << "Time: " << time_ << " " <<
+        std::endl << compare_arrays(mat, mat2, N1*N2) << std::endl;
+
+    /*
     const int N = qr_params->getDataRef().M_ROWS;
     const int B = qr_params->getDataRef().B_COLS;
 
@@ -67,4 +92,5 @@ int main()
  //   print_to(std::cout, Acpy2, N, N, 10);
 
     printf("CORRECTNESS: %lf\n\n", compare_arrays(A, Acpy2, N*N));
+    */
 }
