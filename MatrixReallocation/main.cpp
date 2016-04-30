@@ -10,87 +10,102 @@
 
 using std::ifstream;
 
+// Сделать!
+// 1) Сократить просмотр больших промежутков при поиске нового цикла                    (СЛОЖНО)
+// 2) Определить более надежное условие параллельности циклов (да и это не подводит..)  (СРЕДНЕ)
+// 3) Найти способ не заносить элементы параллельных циклов в help_vec (СРЕДНЕ)
+// 6) Подумать и поэкспериментировать, можно ли,
+//    имея sdr для [b1,b2,d1,d2] и для [b2,b3,d2,d3], получить sdr для [b1,b3,d1,d3] ?  (СЛОЖНО)
+// 7) Применить экономичные структуры данных для оптимизации объема памяти
+//    для хранения посещенных элементов                                                 (ПРОСТО)
+// 8) Исправить ошибку в функции стандартного QR-разложения (сравнение с maple)         (СРЕДНЕ)
+// 9) Исправить ошибки в release-версиях функций переразмещения
+//    (инициализация некоторых полей структур нулями)                                   (ПРОСТО)
+
 int main()
 {
     setlocale(LC_ALL, "");
 
 //    const TaskClass* floyd_params   = read_floyd_algorythm_parameters();
-//    const TaskClass* qr_params      = read_qr_parameters();
+    const TaskClass* qr_params      = read_qr_parameters();
 //    const TaskClass* mult_params    = read_multiplication_parameters();
 //    const TaskClass* realloc_params = read_reallocation_test_parameters();
 
-    //reallocation_test(*realloc_params, true);
+    /*int N = 5;
+    int B1 = 5;
+    int B2 = 2;
+    int D1 = 2;
+    int D2 = 2;*/
+//    TaskClass params(N,N,B1,B2,D1,D2);
 
+    const TaskClass& params = *qr_params;
+    const int NN = params.getDataRef().M_ROWS * params.getDataRef().M_ROWS;
 
+    double* mat_t = new double[NN];
+    double* mat_b  = new double[NN];
+    double* mat_db = new double[NN];
+    double* mat_st = new double[NN];
+    simple_fill(mat_st, params.getDataRef().M_ROWS, params.getDataRef().M_ROWS);
+    mat_st[0] *= -1;
+    mat_st[1] *= -1;
+    mat_st[2] *= -1;
+    mat_st[11] *= -1;
+    mat_st[12] *= -1;
+    mat_st[13] *= -1;
+    mat_st[22] *= -1;
+    mat_st[23] *= -1;
+    mat_st[24] *= -1;
+    memcpy(mat_t,  mat_st, NN*sizeof(double));
+    memcpy(mat_b,  mat_st, NN*sizeof(double));
+    memcpy(mat_db, mat_st, NN*sizeof(double));
 
-    int N1 = 5123;
-    int N2 = 5324;
-    int B1 = 385;
-    int B2 = 571;
-    int D1 = 37;
-    int D2 = 74;
-
-    double* mat = new double[N1*N2];
-    double* mat2 = new double[N1*N2];
-    generate(mat, N1, N2);
-    memcpy(mat2, mat, N1*N2 * sizeof(double));
-
-    double time_ = clock();
-    standard_to_block_layout_reallocation_release(mat, N1, N2, B1, B2);
-    block_to_standard_layout_reallocation_release(mat, N1, N2, B1, B2);
-    time_ = (clock() - time_) / (1.0 * CLOCKS_PER_SEC);
-
-    std::cout << "Time: " << time_ << " " <<
-        std::endl << compare_arrays(mat, mat2, N1*N2) << std::endl;
-
-    /*
-    const int N = qr_params->getDataRef().M_ROWS;
-    const int B = qr_params->getDataRef().B_COLS;
-
-    double* A = new double[N*N];
-    double* Acpy = new double[N*N];
-    double* Acpy2 = new double[N*N];
-
-    generate(A, N, N);
-    memcpy(Acpy, A, N*N*sizeof(double));
-    memcpy(Acpy2, A, N*N*sizeof(double));
-
-    printf("STANDARD START...\n"); 
-    double time_ = clock();
-    QR_WY_standard(Acpy, N, B);
-    time_ = (clock() - time_) / (1.0 * CLOCKS_PER_SEC);
-    printf("STANDARD END: %lf секунд\n\n", time_);
- //   print_to(std::cout, Acpy, N, N, 10);
-
-    printf("TILED START...\n");
-    time_ = clock();
-    QR_WY_tiled(A, qr_params->getDataRef());
-    time_ = (clock() - time_) / (1.0 * CLOCKS_PER_SEC);
-    printf("TILED END: %lf секунд\n\n", time_);
- //   print_to(std::cout, Acpy, N, N, 10);
+    std::cout << std::endl;
+    print_to(std::cout, mat_st, params.getDataRef().M_ROWS, params.getDataRef().M_ROWS);
     
-    printf("CORRECTNESS: %lf\n\n", compare_arrays(A,Acpy,N*N));
-
-    printf("REALLOCATION START...\n");
-    time_ = clock();
-    const BlockReallocationInfo* realloc_info = 
-        standard_to_block_layout_reallocation(Acpy2, qr_params->getDataRef());
+    std::cout << "\nSTART!\n\n";
+    
+    double time_ = clock();
+    QR_WY_standard(mat_st, params.getDataRef().M_ROWS, params.getDataRef().B_COLS);
     time_ = (clock() - time_) / (1.0 * CLOCKS_PER_SEC);
-    printf("REALLOCATION END: %lf секунд\n\n", time_);
+    std::cout << "STANDARD COMPLETE! " << time_ << std::endl << std::endl;
 
-    printf("BLOCK START...\n");
     time_ = clock();
-    QR_WY_block(Acpy2, qr_params->getDataRef());
+    QR_WY_tiled(mat_t, params.getDataRef());
     time_ = (clock() - time_) / (1.0 * CLOCKS_PER_SEC);
-    printf("BLOCK END: %lf секунд\n\n", time_);
-
-    printf("INVERSE REALLOCATION START...\n");
+    std::cout << "TILED COMPLETE! " << time_ << std::endl << std::endl;
+    
+    const BlockReallocationInfo* info =
+        standard_to_block_layout_reallocation(mat_b, params);
+    std::cout << "REALLOC COMPLETE!\n";
     time_ = clock();
-    block_to_standard_layout_reallocation(Acpy2, realloc_info);
+    QR_WY_block(mat_b, params.getDataRef());
     time_ = (clock() - time_) / (1.0 * CLOCKS_PER_SEC);
-    printf("INVERSE REALLOCATION END: %lf секунд\n\n", time_);
- //   print_to(std::cout, Acpy2, N, N, 10);
+    std::cout << "BLOCK COMPLETE! " << time_ << std::endl;
+    block_to_standard_layout_reallocation(mat_b, *info);
+    std::cout << "INVERSE REALLOC COMPLETE!\n\n";
+    
+    const DoubleBlockReallocationInfo* info2 =
+        standard_to_double_block_layout_reallocation(mat_db, params);
+    std::cout << "REALLOC COMPLETE!\n";
+    time_ = clock();
+    QR_WY_double_block(mat_db, params.getDataRef());
+    time_ = (clock() - time_) / (1.0 * CLOCKS_PER_SEC);
+    std::cout << "DOUBLE BLOCK COMPLETE! " << time_ << std::endl;
+    double_block_to_standard_layout_reallocation(mat_db, *info2);
+    std::cout << "INVERSE REALLOC COMPLETE!\n\n";
 
-    printf("CORRECTNESS: %lf\n\n", compare_arrays(A, Acpy2, N*N));
-    */
+    std::cout << " \n DIFFERENCE DOUBLE - BLOCK [ " << compare_arrays(mat_db, mat_b, NN)  << " ]";
+    std::cout << " \n DIFFERENCE DOUBLE - TILED [ " << compare_arrays(mat_db, mat_t, NN)  << " ]";
+    std::cout << " \n DIFFERENCE DOUBLE - STAND [ " << compare_arrays(mat_db, mat_st, NN) << " ]";
+    std::cout << " \n DIFFERENCE BLOCK  - TILED [ " << compare_arrays(mat_b, mat_t, NN)   << " ]";
+    std::cout << " \n DIFFERENCE BLOCK  - STAND [ " << compare_arrays(mat_b, mat_st, NN)  << " ]";
+    std::cout << " \n DIFFERENCE TILED  - STAND [ " << compare_arrays(mat_t, mat_st, NN)  << " ]\n ";
+
+    std::cout << std::endl;
+    print_to(std::cout, mat_b, params.getDataRef().M_ROWS, params.getDataRef().M_ROWS, 12);
+
+    delete[] mat_t;
+    delete[] mat_b;
+    delete[] mat_db;
+    delete[] mat_st;
 }

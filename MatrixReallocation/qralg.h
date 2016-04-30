@@ -3,19 +3,23 @@
 
 #include "taskdata.h"
 
-// Стандартный QR-алгоритм с WY-разложением.
+// Standard QR-algorithm with WY-decomposition.
 double* QR_WY_standard(double* A, const int N, const int r);
 
-// QR-алгоритм с WY-разложением.
-// Умножения матриц производятся с тайлингом.
+// Standard QR-algorithm with WY-decomposition.
+// Matrix multiplications are produced with tiling.
 double* QR_WY_tiled(double* A, const TaskData& parameters);
 
-// QR-алгоритм с WY-разложением.
-// Умножения матриц производятся с двойным тайлингом.
+// Standard QR-algorithm with WY-decomposition.
+// Matrix multiplications are produced with double tiling.
 double* QR_WY_double_tiled(double* A, const TaskData& parameters);
 
-// QR-алгоритм с WY-разложением.
-// Матрица А предполагается размещенной блочно.
+// Standard QR-algorithm with WY-decomposition.
+// Matrix A must has block layout.
 double* QR_WY_block(double* A, const TaskData& parameters);
+
+// Standard QR-algorithm with WY-decomposition.
+// Matrix A must has double block layout.
+double* QR_WY_double_block(double* A, const TaskData& parameters);
 
 #endif  // _QRALG_H_

@@ -761,3 +761,17 @@ void reallocation_test(const TaskClass& parameters,
 
     delete[] mat1;
 }
+
+void qralg_test(const TaskClass& parameters,
+    const bool console_info_output)
+{
+
+}
+/*
+void correctness_test(const TaskClass& params_left,
+    const TaskClass& params_right,
+    const bool       console_info_output = false)
+{
+
+}
+*/

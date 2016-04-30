@@ -8,21 +8,10 @@ using std::sort;
 using std::swap;
 using std::min;
 
-// Сделать!
-// 1) Сократить просмотр больших промежутков при поиске нового цикла
-// 2) Определить более надежное условие параллельности циклов (да и это не подводит..)
-// 3) Найти способ не заносить элементы параллельных циклов в help_vec
-// 6) Подумать и поэкспериментировать, можно ли,
-//    имея sdr для [b1,b2,d1,d2] и для [b2,b3,d2,d3], получить sdr для [b1,b3,d1,d3] ?
-// 7) Применить экономичные структуры данных для оптимизации объема памяти для хранения посещенных элементов
-
 double* standard_to_block_layout_reallocation_buf(const double* data_ptr,
     const TaskClass& task_info)
 {
     const TaskData& data = task_info.getDataRef();
-
-    const int blocks_count_in_col = static_cast<int>(ceil(1.0 * data.M_ROWS / data.B_ROWS));
-    const int blocks_count_in_row = static_cast<int>(ceil(1.0 * data.M_COLS / data.B_COLS));
     
     double* result = new double[data.M_ROWS * data.M_COLS];
     for (int i = 0; i < data.M_ROWS * data.M_COLS; ++i)
@@ -873,6 +862,11 @@ public:
 
     static void clear()
     {
+        for (size_t i = 0; i < cache_data.size(); ++i)
+        {
+            const_cast<BlockReallocationInfo*>(cache_data[i])->sdr_main.clear();
+            const_cast<BlockReallocationInfo*>(cache_data[i])->sdr_addit.clear();
+        }
         cache_data.clear();
     }
 
