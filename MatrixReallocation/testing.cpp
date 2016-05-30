@@ -2,6 +2,7 @@
 #include "reallocation.h"
 #include "multiplication.h"
 #include "floydalg.h"
+#include "qralg.h"
 #include "service.h"
 
 #include <cstring>
@@ -765,7 +766,233 @@ void reallocation_test(const TaskClass& parameters,
 void qralg_test(const TaskClass& parameters,
     const bool console_info_output)
 {
+    const int N = parameters.getDataRef().M_ROWS;
+    const int B1 = parameters.getDataRef().B_ROWS;
+    const int B2 = parameters.getDataRef().B_COLS;
+    const int D1 = parameters.getDataRef().D_ROWS;
+    const int D2 = parameters.getDataRef().D_COLS;
 
+    FILE* log_file;
+    fopen_s(&log_file, "../qralg_test_log.txt", "a");
+    
+    fprintf(log_file, "\n [> Запуск тестов для параметров:\n");
+    fprintf(log_file, "    N = %5d\n", N);
+    fprintf(log_file, "    B1 = %5d, B2 = %5d\n", B1, B2);
+    fprintf(log_file, "    D1 = %5d, D2 = %5d\n", D1, D2);
+    
+    if (console_info_output)
+    {
+        printf("\n\n [> Запуск тестов для параметров:\n");
+        printf("    N = %5d\n", N);
+        printf("    B1 = %5d, B2 = %5d\n", B1, B2);
+        printf("    D1 = %5d, D2 = %5d\n", D1, D2);
+    }
+    
+    double* mat_t = new double[N*N];
+//    double* mat_dt = new double[N*N];
+    double* mat_b = new double[N*N];
+    double* mat_db = new double[N*N];
+    double* mat_st = new double[N*N];
+
+    const double memory_val = (40.0 * N * N) / (1024 * 1024);
+    fprintf(log_file, "  > Объем выделенной памяти:   [ %.2lf Мб ]\n", memory_val);
+    fprintf(log_file, "    ---------------------------------------------------------------\n");
+    if (console_info_output)
+    {
+        printf("  > Объем выделенной памяти:   [ %.2lf Мб ]\n", memory_val);
+        printf("    ---------------------------------------------------------------\n");
+    }
+    
+    fprintf(log_file, "  > Заполнение массивов...                             ");
+    if (console_info_output)
+    {
+        printf("  > Заполнение массивов...                             ");
+    }
+    double time_ = clock();
+    generate(mat_st, N, N);
+    memcpy(mat_t, mat_st, N*N*sizeof(double));
+ //   memcpy(mat_dt, mat_st, N*N*sizeof(double));
+    memcpy(mat_b, mat_st, N*N*sizeof(double));
+    memcpy(mat_db, mat_st, N*N*sizeof(double));
+    time_ = (clock() - time_) / (1.0 * CLOCKS_PER_SEC);
+    fprintf(log_file, "[ %.3lf секунд ]\n", time_);
+    if (console_info_output)
+    {
+        printf("[ %.3lf секунд ]\n", time_);
+    }
+
+    fprintf(log_file, "  > Стандартный QR-алгоритм (WY-разложение)...         ");
+    if (console_info_output)
+    {
+        printf("  > Стандартный QR-алгоритм (WY-разложение)...         ");
+    }
+    time_ = clock();
+    QR_WY_standard(mat_st, N, B2);
+    time_ = (clock() - time_) / (1.0 * CLOCKS_PER_SEC);
+    fprintf(log_file, "[ %.3lf секунд ]\n", time_);
+    if (console_info_output)
+    {
+        printf("[ %.3lf секунд ]\n", time_);
+    }
+
+    fprintf(log_file, "  > QR-алгоритм с тайлингом (WY-разложение)...         ");
+    if (console_info_output)
+    {
+        printf("  > QR-алгоритм с тайлингом (WY-разложение)...         ");
+    }
+    time_ = clock();
+    QR_WY_tiled(mat_t, parameters.getDataRef());
+    time_ = (clock() - time_) / (1.0 * CLOCKS_PER_SEC);
+    fprintf(log_file, "[ %.3lf секунд ]\n", time_);
+    if (console_info_output)
+    {
+        printf("[ %.3lf секунд ]\n", time_);
+    }
+
+  /*  fprintf(log_file, "  > QR-алгоритм с двойным тайлингом (WY-разложение)... ");
+    if (console_info_output)
+    {
+        printf("  > QR-алгоритм с двойным тайлингом (WY-разложение)... ");
+    }
+    time_ = clock();
+    QR_WY_double_tiled(mat_dt, parameters.getDataRef());
+    time_ = (clock() - time_) / (1.0 * CLOCKS_PER_SEC);
+    fprintf(log_file, "[ %.3lf секунд ]\n", time_);
+    if (console_info_output)
+    {
+        printf("[ %.3lf секунд ]\n", time_);
+    }*/
+
+    fprintf(log_file, "  > Блочное переразмещение...                          ");
+    if (console_info_output)
+    {
+        printf("  > Блочное переразмещение...                          ");
+    }
+    time_ = clock();
+    const BlockReallocationInfo* block_realloc_info =
+        standard_to_block_layout_reallocation(mat_b, parameters);
+    time_ = (clock() - time_) / (1.0 * CLOCKS_PER_SEC);
+    fprintf(log_file, "[ %.3lf секунд ]\n", time_);
+    if (console_info_output)
+    {
+        printf("[ %.3lf секунд ]\n", time_);
+    }
+
+    fprintf(log_file, "  > Блочный QR-алгоритм (WY-разложение)...             ");
+    if (console_info_output)
+    {
+        printf("  > Блочный QR-алгоритм (WY-разложение)...             ");
+    }
+    time_ = clock();
+    QR_WY_block(mat_b, parameters.getDataRef());
+    time_ = (clock() - time_) / (1.0 * CLOCKS_PER_SEC);
+    fprintf(log_file, "[ %.3lf секунд ]\n", time_);
+    if (console_info_output)
+    {
+        printf("[ %.3lf секунд ]\n", time_);
+    }
+
+    fprintf(log_file, "  > Обратное переразмещение...                         ");
+    if (console_info_output)
+    {
+        printf("  > Обратное переразмещение...                         ");
+    }
+    time_ = clock();
+    block_to_standard_layout_reallocation(mat_b, *block_realloc_info);
+    time_ = (clock() - time_) / (1.0 * CLOCKS_PER_SEC);
+    fprintf(log_file, "[ %.3lf секунд ]\n", time_);
+    if (console_info_output)
+    {
+        printf("[ %.3lf секунд ]\n", time_);
+    }
+    
+    fprintf(log_file, "  > Двойное блочное переразмещение...                  ");
+    if (console_info_output)
+    {
+        printf("  > Двойное блочное переразмещение...                  ");
+    }
+    time_ = clock();
+    const DoubleBlockReallocationInfo* double_block_realloc_info =
+        standard_to_double_block_layout_reallocation(mat_db, parameters);
+    time_ = (clock() - time_) / (1.0 * CLOCKS_PER_SEC);
+    fprintf(log_file, "[ %.3lf секунд ]\n", time_);
+    if (console_info_output)
+    {
+        printf("[ %.3lf секунд ]\n", time_);
+    }
+    
+    fprintf(log_file, "  > Двойной блочный QR-алгоритм (WY-разложение)...     ");
+    if (console_info_output)
+    {
+        printf("  > Двойной блочный QR-алгоритм (WY-разложение)...     ");
+    }
+    time_ = clock();
+    QR_WY_double_block(mat_db, parameters.getDataRef());
+    time_ = (clock() - time_) / (1.0 * CLOCKS_PER_SEC);
+    fprintf(log_file, "[ %.3lf секунд ]\n", time_);
+    if (console_info_output)
+    {
+        printf("[ %.3lf секунд ]\n", time_);
+    }
+    
+    fprintf(log_file, "  > Обратное переразмещение...                         ");
+    if (console_info_output)
+    {
+        printf("  > Обратное переразмещение...                         ");
+    }
+    time_ = clock();
+    double_block_to_standard_layout_reallocation(mat_db, *double_block_realloc_info);
+    time_ = (clock() - time_) / (1.0 * CLOCKS_PER_SEC);
+    fprintf(log_file, "[ %.3lf секунд ]\n\n", time_);
+    if (console_info_output)
+    {
+        printf("[ %.3lf секунд ]\n\n", time_);
+    }
+
+    const double comparison_dbst = compare_arrays(mat_db, mat_st, N*N);
+    const double comparison_dbt  = compare_arrays(mat_db, mat_t, N*N) ;
+ //   const double comparison_dbdt = compare_arrays(mat_db, mat_dt, N*N);
+    const double comparison_dbb  = compare_arrays(mat_db, mat_b, N*N);
+    const double comparison_bst  = compare_arrays(mat_b, mat_st, N*N);
+    const double comparison_bt   = compare_arrays(mat_b, mat_t, N*N);
+ //   const double comparison_bdt  = compare_arrays(mat_b, mat_dt, N*N);
+ //   const double comparison_dtst = compare_arrays(mat_dt, mat_st, N*N);
+ //   const double comparison_dtt  = compare_arrays(mat_dt, mat_t, N*N);
+    const double comparison_tst  = compare_arrays(mat_t, mat_st, N*N);
+
+    fprintf(log_file, "  > Попарное сравнение результатов:\n");
+    fprintf(log_file, "    DIFFERENCE DB - S  [ %.6lf ]\n", comparison_dbst);
+    fprintf(log_file, "    DIFFERENCE DB - T  [ %.6lf ]\n", comparison_dbt);
+ //   fprintf(log_file, "    DIFFERENCE DB - DT [ %.6lf ]\n", comparison_dbdt);
+    fprintf(log_file, "    DIFFERENCE DB - B  [ %.6lf ]\n", comparison_dbb);
+    fprintf(log_file, "    DIFFERENCE B  - S  [ %.6lf ]\n", comparison_bst);
+    fprintf(log_file, "    DIFFERENCE B  - T  [ %.6lf ]\n", comparison_bt);
+ //   fprintf(log_file, "    DIFFERENCE B  - DT [ %.6lf ]\n", comparison_bdt);
+ //   fprintf(log_file, "    DIFFERENCE DT - S  [ %.6lf ]\n", comparison_dtst);
+ //   fprintf(log_file, "    DIFFERENCE DT - T  [ %.6lf ]\n", comparison_dtt);
+    fprintf(log_file, "    DIFFERENCE T  - S  [ %.6lf ]\n", comparison_tst);
+    if (console_info_output)
+    {
+        printf("  > Попарное сравнение результатов:\n");
+        printf("    DIFFERENCE DB - S  [ %.6lf ]\n", comparison_dbst);
+        printf("    DIFFERENCE DB - T  [ %.6lf ]\n", comparison_dbt);
+  //      printf("    DIFFERENCE DB - DT [ %.6lf ]\n", comparison_dbdt);
+        printf("    DIFFERENCE DB - B  [ %.6lf ]\n", comparison_dbb);
+        printf("    DIFFERENCE B  - S  [ %.6lf ]\n", comparison_bst);
+        printf("    DIFFERENCE B  - T  [ %.6lf ]\n", comparison_bt);
+  //      printf("    DIFFERENCE B  - DT [ %.6lf ]\n", comparison_bdt);
+  //      printf("    DIFFERENCE DT - S  [ %.6lf ]\n", comparison_dtst);
+  //      printf("    DIFFERENCE DT - T  [ %.6lf ]\n", comparison_dtt);
+  //      printf("    DIFFERENCE T  - S  [ %.6lf ]\n", comparison_tst);
+    }
+    
+    fclose(log_file);
+    
+    delete[] mat_st;
+    delete[] mat_t;
+//    delete[] mat_dt;
+    delete[] mat_b;
+    delete[] mat_db;
 }
 /*
 void correctness_test(const TaskClass& params_left,

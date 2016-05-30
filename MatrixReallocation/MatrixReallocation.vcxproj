@@ -142,7 +142,7 @@
       <UseMSVC>false</UseMSVC>
       <EnableExpandedLineNumberInfo>false</EnableExpandedLineNumberInfo>
       <OpenMP>GenerateSequentialCode</OpenMP>
-      <OptimizeForWindowsApplication>false</OptimizeForWindowsApplication>
+      <OptimizeForWindowsApplication>true</OptimizeForWindowsApplication>
       <Parallelization>false</Parallelization>
       <UseProcessorExtensions>None</UseProcessorExtensions>
       <Cpp0xSupport>true</Cpp0xSupport>
@@ -150,6 +150,7 @@
       <FavorSizeOrSpeed>Neither</FavorSizeOrSpeed>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <EnableEnhancedInstructionSet>NotSet</EnableEnhancedInstructionSet>
+      <UseIntelOptimizedHeaders>true</UseIntelOptimizedHeaders>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
