@@ -22,60 +22,35 @@ using std::ifstream;
 //     (инициализация некоторых полей структур нулями)                                   (ПРОСТО)
 //  7) Проход по циклу сделать с двух сторон (?)                                         (ПРОСТО)
 //  8) Добавить тест для копирования куска матрицы                                       (ПРОСТО)
-//  9) Изменить способ определения нового цикла                                          (ПРОСТО)
+//  9) Модифицировать способ определения нового цикла                                    (ПРОСТО)
 // 10) Разобраться с обратным переразмещением матрицы-генератора при умножении матриц    (СРЕДНЕ)
-// 11) Сделать QR-разложение с двойным тайлингом                                         (СРЕДНЕ)
+// 11) Отрегулировать размер доп. вектора                                                (ПРОСТО)
+
+// 12) Исправить QR-алгоритм с тайлингом (некоторые циклы не блочные!)                   (СРЕДНЕ)
+// 13) Добавить в QR-алгоритм с тайлингом поддержку смещения начала отсчета блоков
+//     когда ширина блока кратно больше его высоты                                       (СРЕДНЕ)
+
+// 14) Переписать комментарии в соответствии с последними правками                       (ПРОСТО)
+// 15) Сделать алгоритм двойного блочного переразмещения с использованием
+//     соответствующей индексной функции, а не через композицию двух блочных
+//     переразмещений, сравнить производительность и оставить лучший                     (СЛОЖНО)
+// 16) Использовать делегат для выбора нужной индексной функции (?)                      (СРЕДНЕ)
+// 17) Довести все тестируемые алгоритмы до равной степени оптимизации                   (ПРОСТО)
+// 18) Переименовать функцию cycle_distribution_learning и некоторые другие              (ПРОСТО)
+// 19) В разделе тестирования одинаковый код вынести в отдельные функции                 (ПРОСТО)
+// 20) Пересчитать сложность основного алгоритма переразмещения                          (ПРОСТО)
 
 int main()
 {
     setlocale(LC_ALL, "");
 
-//    const TaskClass& floyd_params   = *read_floyd_algorythm_parameters();
+ //   const TaskClass& floyd_params   = *read_floyd_algorythm_parameters();
     const TaskClass& qr_params      = *read_qr_parameters();
-//    const TaskClass& mult_params    = *read_multiplication_parameters();
-//    const TaskClass& realloc_params = *read_reallocation_test_parameters();
-    
+ //   const TaskClass* mult_params    = read_multiplication_parameters();
+ //   const TaskClass& realloc_params = *read_reallocation_test_parameters();
+
+ //   floyd_test(floyd_params, true);
     qralg_test(qr_params, true);
+ //   matrix_multiplication_tests(mult_params[0], mult_params[1], true);
+ //   reallocation_test(realloc_params, true);
 }
-
-
-/*
-const TaskClass& params = *read_qr_parameters();
-const int N = params.getDataRef().M_ROWS;
-
-double* mat_t = new double[N*N];
-double* mat_b = new double[N*N];
-double* mat_db = new double[N*N];
-double* mat_st = new double[N*N];
-
-generate(mat_st, N, N);
-memcpy(mat_b, mat_st, N*N*sizeof(double));
-memcpy(mat_db, mat_st, N*N*sizeof(double));
-
-int rowc = 1;
-int colc = 23;
-
-double time_ = clock();
-// Обычный алгоритм
-for (int i = rowc; i < N; ++i)
-{
-memset(mat_db + i*N + colc, 0,
-(N - colc)*sizeof(double));
-}
-time_ = (clock() - time_) / (1.0 * CLOCKS_PER_SEC);
-std::cout << "STANDARD COMPLETE! " << time_ << std::endl << std::endl;
-
-// Алгоритм для блочного размещения
-const DoubleBlockReallocationInfo* info =
-standard_to_double_block_layout_reallocation(mat_b, params);
-time_ = clock();
-filmat_part(mat_b, 0, params.getDataRef(), rowc, colc);
-time_ = (clock() - time_) / (1.0 * CLOCKS_PER_SEC);
-std::cout << "FILMAT COMPLETE! " << time_ << std::endl << std::endl;
-double_block_to_standard_layout_reallocation(mat_b, *info);
-
-std::cout << "\n" << compare_arrays(mat_b, mat_db, N*N) << "\n";
-
-//    print_to(std::cout, mat_db, N, N, 10);
-//    print_to(std::cout, mat_b, N, N, 10);
-*/

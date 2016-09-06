@@ -499,7 +499,7 @@ void filmat_part(double* dst_ptr,
             const int cpy_size = (jd_block_w - j_lb_loc) * sizeof(double);
             for (int l = dloc_row_coord; l < id0_block_h; ++l)
             {
-                memset(dst_dblock_shifted + l*jd_block_w, 0, cpy_size);
+                memset(dst_dblock_shifted + l*jd_block_w, val, cpy_size);
             }
         }
 
@@ -513,11 +513,11 @@ void filmat_part(double* dst_ptr,
             const int cpy_size = (jd0_block_w - dloc_col_coord) * sizeof(double);
             for (int l = 0; l < id_block_h; ++l)
             {
-                memset(dst_dblock_shifted + l*jd0_block_w, 0, cpy_size);
+                memset(dst_dblock_shifted + l*jd0_block_w, val, cpy_size);
             }
 
             const int shift = (jd0_shift + jd0_block_w) * id_block_h;
-            memset(dst_dstripe + shift, 0,
+            memset(dst_dstripe + shift, val,
                 (real_b2*id_block_h - shift)*sizeof(double));
         }
     }
@@ -539,13 +539,13 @@ void filmat_part(double* dst_ptr,
             double* dst_dblock = dst0_dstripe + j_bd_shift * id0_block_h;
 
             const int shift = dloc_row_coord * jd_block_w;
-            memset(dst_dblock + shift, 0,
+            memset(dst_dblock + shift, val,
                 (id0_block_h*jd_block_w - shift)*sizeof(double));
         }
 
         const int shift = (id0_shift + id0_block_h) * jb_block_w;
         const int set_size = (real_b1*jb_block_w - shift)*sizeof(double);
-        memset(dst_block + shift, 0, set_size);
+        memset(dst_block + shift, val, set_size);
     }
 
     // Copy passing over left big-block-column, which can be incomplete
@@ -567,11 +567,11 @@ void filmat_part(double* dst_ptr,
             const int set_line_size = (jd0_block_w - dloc_col_coord) * sizeof(double);
             for (int l = 0; l < id_block_h; ++l)
             {
-                memset(dst_dblock_shifted + l*jd0_block_w, 0, set_line_size);
+                memset(dst_dblock_shifted + l*jd0_block_w, val, set_line_size);
             }
 
             const int shift = id_block_h * (jd0_shift + jd0_block_w);
-            memset(dst_dstripe + shift, 0,
+            memset(dst_dstripe + shift, val,
                 (id_block_h*real_b2 - shift)*sizeof(double));
         }
     }
@@ -582,6 +582,6 @@ void filmat_part(double* dst_ptr,
         const int i_mb_shift = ib * b1;
         const int ib_block_h = min(b1, N - i_mb_shift);
         const int shift = ib_block_h*(d2_shift + real_b2);
-        memset(dst_ptr + i_mb_shift*N + shift, 0, (ib_block_h*N - shift)*sizeof(double));
+        memset(dst_ptr + i_mb_shift*N + shift, val, (ib_block_h*N - shift)*sizeof(double));
     }
 }

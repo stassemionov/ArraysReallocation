@@ -4,7 +4,7 @@
 
 using std::min;
 
-void block_matrix_multiplication_double_tiled(double* gen_matrix,
+void matrix_multiplication_double_block(double* gen_matrix,
     const double* left_matrix,
     const double* right_matrix,
     const TaskClass& left_mat_data,
@@ -97,7 +97,7 @@ void block_matrix_multiplication_double_tiled(double* gen_matrix,
     }
 }
 
-void block_matrix_multiplication_tiled(double* gen_matrix,
+void matrix_multiplication_block(double* gen_matrix,
     const double* left_matrix,
     const double* right_matrix,
     const TaskClass& left_mat_data,

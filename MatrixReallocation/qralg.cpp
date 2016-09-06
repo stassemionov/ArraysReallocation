@@ -14,7 +14,7 @@ double* QR_WY_tiled(double* A, const TaskData& parameters)
     const int b2 = parameters.B_COLS;
     
     double* v = new double[N];
-    double* w = new double[N];
+    double* w = new double[b2];
     double* W = new double[N * b2];
     double* Y = new double[N * b2];
     double* WY = new double[N * N];
@@ -25,15 +25,13 @@ double* QR_WY_tiled(double* A, const TaskData& parameters)
     {
         // Указывает на начало следующего блока за текущим
         const int t = min(lambda + b2, N);
-        const int alloc_size = (N - lambda)*sizeof(double);
         const int row_b_count = static_cast<int>(ceil(1.0 * (N - t) / b2));
         const int col_b_count = static_cast<int>(ceil(1.0 * (N - lambda) / b1));
 
         // Выполнение преобразований над текущим блоком
         for (int it = lambda; it < t; ++it)
         {
-            // ничего, если занулятся несколько лишних коодинат
-            memset(w + lambda, 0, alloc_size);
+            memset(w, 0, (t - lambda)*sizeof(double));
 
             double norm = 0.0;
             double scalar = 1.0;
@@ -71,10 +69,14 @@ double* QR_WY_tiled(double* A, const TaskData& parameters)
                     {
                         sum += A[k*N + j] * v[k];
                     }
-                    w[j] += beta * sum;
+                    w[j-lambda] += beta * sum;
                 }
             }
-     
+            /*for (int k = it-lambda; k < b2; ++k)
+            {
+                w[k] *= beta;
+            }*/
+
             // Преобразование текущего блока матрицы A
             // здесь блочность не нужна, она есть по умолчанию
             for (int j = it; j < N; ++j)
@@ -83,7 +85,7 @@ double* QR_WY_tiled(double* A, const TaskData& parameters)
                 const double vj = v[j];
                 for (int k = it; k < t; ++k)
                 {
-                    Aj[k] += vj * w[k];
+                    Aj[k] += vj * w[k - lambda];
                 }
             }
 
@@ -196,8 +198,8 @@ double* QR_WY_tiled(double* A, const TaskData& parameters)
 
                 // Для k = 0 отдельно, чтобы не выполнять проверку
                 // в самом глубоком цикле
-                const int k_lb = lambda;
-                const int k_ub = min(k_lb + b1, N);
+                const int k_lb0 = lambda;
+                const int k_ub0 = min(k_lb0 + b1, N);
                 for (int i = i_lb; i < i_ub; ++i)
                 {
                     double* Abuf_i = Abuf + i*N;
@@ -207,7 +209,7 @@ double* QR_WY_tiled(double* A, const TaskData& parameters)
                     for (int j = j_lb; j < j_ub; ++j)
                     {
                         double sum = Ai[j];
-                        for (int k = k_lb; k < k_ub; ++k)
+                        for (int k = k_lb0; k < k_ub0; ++k)
                         {
                             sum += WYi[k] * A[k*N + j];
                         }
@@ -287,18 +289,16 @@ double* QR_WY_double_tiled(double* A, const TaskData& parameters)
     double* Y = new double[N * b2];
     double* WY = new double[N * N];
     double* Abuf = new double[N * N];
-    double* sum_vec = new double[b1];
+    double* sum_vec = new double[db1];
 
     int curr_i_block_ind = -1;
     int curr_j_block_ind = -1;
 
-    // Layout data for WY-matrix
-    TaskClass WY_task_class;
-
     for (int lambda = 0; lambda < N; lambda += b2)
     {
         // Indices of big block, that contains element (lambda,lambda).
-        // Remark: row-index can be not constant when b1 != b2.
+        // Remark: row-index value can increase with passing over diagonal
+        //         when 'b1' != 'b2'.
         curr_i_block_ind = lambda / b1;
         ++curr_j_block_ind;
 
@@ -333,85 +333,27 @@ double* QR_WY_double_tiled(double* A, const TaskData& parameters)
             // Index of small-block-column,
             // which contains 'lambda+it'-th column
             const int dblock_col_index = it / db2;
-            // Index of small-block-row of diagonal big block,
-            // which contains 'full_shift'-th row of matrix
-            const int dblock_row_index = (full_shift - (d1_shift + b_begin*b1)) / db1;
-            // Width of this small block
-            const int dblock_width = min(db2, d2 - dblock_col_index*db2);
-            const int loc_it = it - dblock_col_index*db2;
 
+            // * Householder vector computation...
             double norm = 0.0;
             double scalar = 1.0;
             double buf;
-
-            // * Householder vector computation...
-            // Using of 'it'-th column of current block-column,
-            // starting with (lambda+it)-th position
-            for (int ib = b_begin; ib < col_b_count; ++ib)
+            const double* A_shifted_HV = A + full_shift * N + full_shift;
+            double* v_shifted_HV = v + full_shift;
+            for (int i = full_shift; i < N; ++i)
             {
-                // Shift of current big block first line
-                // from matrix first line
-                const int mb_shift = d1_shift + ib*b1;
-                // Upper and lower bounds for 'ib'-th block lines reading.
-                // 'i_lb' is required, because we need to use block rows
-                // starting with 'full_shift'-th matrix row,
-                // that can be mapped not only to first block row.
-                const int i_lb = max(full_shift, mb_shift) - mb_shift;  // local indexation
-                                                                        // 'i_ub' is required, because last matrix row,
-                                                                        // that can be mapped not only to last block row, but smaller.
-                const int i_ub = min(mb_shift + b1, N);  // global indexation
-                                                         // 'ib'-th block height (number of rows)
-                const int ib_block_h = min(b1, N - mb_shift);
-                // 'ib'-th block beginning pointer
-                const double* Ablock = A + mb_shift*N + ib_block_h*d2_shift;
-
-                // Upper and lower bounds for small blocks stripes reading.
-                // Reasons of using these bounds are the same as 'i_lb' and 'i_ub'.
-                const int id_lb = (i_lb == 0) ? 0 : (i_lb / db1);
-                const int id_ub = (ib == col_b_count - 1) ?
-                    dblock_count_in_diff_bcol :
-                    dblock_count_in_bcol;
-                for (int id = id_lb; id < id_ub; ++id)
-                {
-                    const int loc_shift = id * db1;
-                    // Shift of current small-block-row from matrix first row
-                    const int bd_shift = loc_shift + mb_shift;
-                    // Bounds for current small block reading.
-                    // Reasons of using are the same as 'i_lb' and 'i_ub'
-                    const int lb = max(full_shift, bd_shift) - bd_shift;
-                    const int ub = min(bd_shift + db1, i_ub) - bd_shift;
-                    // 'id'-th small block height (number of rows)
-                    const int id_block_h = min(db1, ib_block_h - loc_shift);
-                    // Pointer to beginning of required small block in 'id'-th stripe
-                    const double* Adblock_shifted = Ablock + loc_shift*d2 +
-                        dblock_col_index*id_block_h*db2 + loc_it;
-                    double* v_shifted = v + bd_shift + lb;
-
-                    for (int i = lb*dblock_width; i < ub*dblock_width; i += dblock_width)
-                    {
-                        buf = Adblock_shifted[i];
-                        *(v_shifted++) = buf;
-                        norm += buf * buf;
-                    }
-                }
+                buf = *A_shifted_HV;
+                (*v_shifted_HV++) = buf;
+                norm += buf * buf;
+                A_shifted_HV += N;
             }
-
-            // Diagonal big block height
-            const int diag_el_block_h = min(b1, N - (d1_shift + b_begin*b1));
-            // Diagonal small block height
-            const int diag_el_dblock_h = min(db1, diag_el_block_h - dblock_row_index*db1);
-            const double A_diag_el = *(A + d1_shift*N + b_begin*b1*N +  // shift for big block stripe
-                d2_shift * diag_el_block_h +  // shift for big block beginning in its stripe
-                ((full_shift % b1) / db1)*db1*d2 +  // shift for small block stripe
-                (dblock_col_index*diag_el_dblock_h*db2) +   // shift for small block beginning in its stripe
-                ((full_shift % b1) % db1)*dblock_width + loc_it);  // shift for diagonal element in small block
-
-            const double diag_el_sign = (A_diag_el < 0) ? -1 : 1;
-            double beta = 1.0 / (A_diag_el + diag_el_sign * sqrt(norm));
-            // Use normalization such that v[it] = 1
+            const double A_diag_el = A[full_shift*N + full_shift];
+            const double A_diag_el_sign = (A_diag_el < 0) ? -1 : 1;
+            double beta = A_diag_el + A_diag_el_sign * sqrt(norm);
+            // используется нормировка, т.ч. v[it] = 1
             for (int j = full_shift + 1; j < N; ++j)
             {
-                buf = (v[j] *= beta);
+                buf = (v[j] /= beta);
                 scalar += buf * buf;
             }
             v[full_shift] = 1.0;
@@ -424,149 +366,126 @@ double* QR_WY_double_tiled(double* A, const TaskData& parameters)
             // because 'full_shift'-th Householder matrix really operates
             // with A(full_shift:*, full_shift:t-1).
             // Pattern of data access is as follows:
-            // 1. Fix big block (kb)
-            // 2. Fix small block stripe in fixed big block (kd)
+            // 1. Fix big block (ib)
+            // 2. Fix small block stripe in fixed big block (id)
             // 3. Fix small block in fixed stripe (jd)
-            // 4. Fix column in fixed small block (j)
-            // 5. Produce passing of fixed column (k)
-            for (int kb = b_begin; kb < col_b_count; ++kb)
+            // 4. Fix row in fixed small block (i)
+            // 5. Produce passing of fixed row (j)
+            for (int ib = b_begin; ib < col_b_count; ++ib)
             {
-                const int mb_shift = kb*b1 + d1_shift;
-                const int k_lb = max(full_shift, mb_shift) - mb_shift;
-                const int k_ub = min(mb_shift + b1, N);
-                const int block_h = min(b1, N - mb_shift);
-                const double* Ablock = A + mb_shift*N + block_h*d2_shift;
-                const double* v_kb_shift = v + mb_shift;
-
-                const int kd_lb = (k_lb == 0) ? 0 : k_lb / db1;
-                const int kd_ub = (kb == col_b_count - 1) ?
+                const int mb_shift = d1_shift + ib * b1;
+                const int block_lb = max(full_shift, mb_shift) - mb_shift;
+                const int block_ub = min(mb_shift + b1, N);
+                const int id_lb = (block_lb == 0) ? 0 : block_lb / db1;
+                const int id_ub = (ib == col_b_count - 1) ?
                     dblock_count_in_diff_bcol :
                     dblock_count_in_bcol;
-                for (int kd = kd_lb; kd < kd_ub; ++kd)
-                {
-                    const int loc_shift = kd * db1;
-                    const int bd_shift = loc_shift + mb_shift;
-                    const int lb = max(full_shift, bd_shift) - bd_shift;
-                    const int ub = min(db1, k_ub - bd_shift);
-                    const int dblock_h = min(db1, block_h - loc_shift);
-                    // Pointer to beginning of 'kb'-th small block stripe
-                    const double* Adstripe = Ablock + loc_shift*d2;
-                    const double* v_kd_shifted = v_kb_shift + loc_shift + lb;
 
-                    // const int& jd_lb = dblock_col_index;
-                    // const int& jd_ub = dblock_count_in_curr_block_row;
+                for (int id = id_lb; id < id_ub; ++id)
+                {
+                    const int i_bd_shift = mb_shift + id * db1;
+                    const int i_lb = max(full_shift, i_bd_shift) - i_bd_shift;
+                    const int i_ub = min(db1, block_ub - i_bd_shift);
+                    const int v_dif_val = i_ub - i_lb;
+                    const double* A_dstripe = A + i_bd_shift * N;
+                    const double* v_id_shifted = v + i_bd_shift + i_lb;
+
                     for (int jd = dblock_col_index; jd < dblock_count_in_curr_block_row; ++jd)
                     {
                         const int loc_drow_shift = jd * db2;
-                        // Width of this small block
-                        const int dblock_w = min(db2, d2 - loc_drow_shift);
                         const int j_lb = max(it, loc_drow_shift) - loc_drow_shift;
                         const int j_ub = min(d2 - loc_drow_shift, db2);
-                        // Pointer to beginning of 'jb'-th small block
-                        const double* Adblock = Adstripe + dblock_h*loc_drow_shift;
-                        double* w_shifted = w + loc_drow_shift;
+                        const int w_dif_val = j_ub - j_lb;
+                        const int A_dif_val = N - w_dif_val;
+                        double* w_shifted = w + loc_drow_shift + j_lb;
+                        const double* A_row = (A_dstripe + i_lb*N) +
+                            lambda + loc_drow_shift + j_lb;
 
-                        const int klb = lb * dblock_w;
-                        const int kub = ub * dblock_w;
-                        for (int j = j_lb; j < j_ub; ++j)
+                        for (int i = i_lb; i < i_ub; ++i)
                         {
-                            double sum = 0.0;
-                            const double* Adblock_shifted = Adblock + j;
-                            for (int k = klb; k < kub; k += dblock_w)
+                            const double vi = *v_id_shifted++;
+                            for (int j = j_lb; j < j_ub; ++j)
                             {
-                                sum += Adblock_shifted[k] * (*(v_kd_shifted++));
+                                (*w_shifted++) += (*A_row++) * vi;
                             }
-                            v_kd_shifted -= (ub - lb);
-                            w_shifted[j] += beta * sum;
+
+                            w_shifted -= w_dif_val;
+                            A_row += A_dif_val;
                         }
+                        v_id_shifted -= v_dif_val;
                     }
                 }
             }
+            for (int k = it; k < d2; ++k)
+            {
+                w[k] *= beta;
+            }
 
-            // Transformation of current block column of matrix A:
+            // Transformation of current block-column:
             // A(fullshift:N, it:t-1) += v[fullshift:N] * (w[it:t-1]^t)
             for (int jb = b_begin; jb < col_b_count; ++jb)
             {
-                const int mb_shift = d1_shift + jb*b1;
-                const int jb_lb = max(full_shift, mb_shift) - mb_shift;
-                const int jb_ub = min(mb_shift + b1, N);
-                const int jb_block_h = min(b1, N - mb_shift);
-                double* Ablock = A + mb_shift*N + jb_block_h*d2_shift;
-
-                const int jd_lb = (jb_lb == 0) ? 0 : jb_lb / db1;
+                const int mb_shift = d1_shift + jb * b1;
+                const int block_lb = max(full_shift, mb_shift) - mb_shift;
+                const int block_ub = min(mb_shift + b1, N);
+                const int jd_lb = (block_lb == 0) ? 0 : block_lb / db1;
                 const int jd_ub = (jb == col_b_count - 1) ?
                     dblock_count_in_diff_bcol :
                     dblock_count_in_bcol;
+
                 for (int jd = jd_lb; jd < jd_ub; ++jd)
                 {
-                    const int loc_shift = jd * db1;
-                    const int bd_shift = loc_shift + mb_shift;
+                    const int bd_shift = mb_shift + jd * db1;
                     const int j_lb = max(full_shift, bd_shift) - bd_shift;
-                    const int j_ub = min(db1, jb_ub - bd_shift);
-                    const int jd_block_h = min(db1, jb_block_h - loc_shift);
-                    double* Adstripe = Ablock + loc_shift*d2;
-                    const double* v_shifted = v + bd_shift;
+                    const int j_ub = min(db1, block_ub - bd_shift);
+                    const int v_diff_val = j_ub - j_lb;
+                    const int j_lb_mult_N = j_lb * N;
+                    double* A_dstripe = A + bd_shift * N;
+                    const double* v_jd_shifted = v + bd_shift + j_lb;
 
                     for (int kd = dblock_col_index; kd < dblock_count_in_curr_block_row; ++kd)
                     {
                         const int loc_drow_shift = kd * db2;
                         const int k_lb = max(it, loc_drow_shift) - loc_drow_shift;
                         const int dblock_w = min(db2, d2 - loc_drow_shift);
-                        double* Adblock_shifted = Adstripe + jd_block_h*loc_drow_shift +
-                            k_lb + j_lb*dblock_w;
-                        const double* w_shifted = w + loc_drow_shift;
+                        const int w_diff_val = dblock_w - k_lb;
+                        const int A_diff_val = N - w_diff_val;
+                        const double* w_shifted = w + loc_drow_shift + k_lb;
+                        double* A_line = (A_dstripe + j_lb_mult_N) +
+                            lambda + loc_drow_shift + k_lb;
 
                         for (int j = j_lb; j < j_ub; ++j)
                         {
-                            double* Aj = Adblock_shifted;
-                            Adblock_shifted += dblock_w;
-                            const double vj = v_shifted[j];
+                            const double vj = (*v_jd_shifted++);
                             for (int k = k_lb; k < dblock_w; ++k)
                             {
-                                (*Aj++) += vj * w_shifted[k];
+                                (*A_line++) += vj * (*w_shifted++);
                             }
+                            A_line += A_diff_val;
+                            w_shifted -= w_diff_val;
                         }
+
+                        v_jd_shifted -= v_diff_val;
                     }
                 }
             }
 
-            // Filling up of underdiagonal part of matrix 'full_shift'-th column
-            // with informative part of Householder vector 'v'
-            const int b_inc_begin = (full_shift + 1 - d1_shift) / b1;
-            for (int ib = b_inc_begin; ib < col_b_count; ++ib)
+            // * Заполнение поддиагнальной части it-го столбца матрицы A
+            //   информативной частью вектора Хаусхолдера
+            double* A_shifted_fill = A + (full_shift + 1)*N + full_shift;
+            const double* v_shifted_fill = v + full_shift + 1;
+            for (int j = full_shift + 1; j < N; ++j)
             {
-                const int mb_shift = d1_shift + ib*b1;
-                const int ib_lb = max(full_shift + 1, mb_shift) - mb_shift;
-                const int ib_ub = min(mb_shift + b1, N);
-                const int ib_block_h = min(b1, N - mb_shift);
-                double* Ablock = A + mb_shift*N + ib_block_h*d2_shift;
-
-                const int id_lb = (ib_lb == 0) ? 0 : (ib_lb / db1);
-                const int id_ub = (ib == col_b_count - 1) ?
-                    dblock_count_in_diff_bcol :
-                    dblock_count_in_bcol;
-                for (int id = id_lb; id < id_ub; ++id)
-                {
-                    const int loc_shift = id * db1;
-                    const int bd_shift = loc_shift + mb_shift;
-                    const int i_lb = max(full_shift + 1, bd_shift) - bd_shift;
-                    const int i_ub = min(db1, ib_ub - bd_shift);
-                    const int id_block_h = min(db1, ib_block_h - loc_shift);
-                    double* Adblock_shifted = Ablock + loc_shift*d2 +
-                        dblock_col_index*id_block_h*db2 + loc_it;
-                    const double* v_shifted = v + bd_shift + i_lb;
-
-                    for (int i = i_lb*dblock_width; i < i_ub*dblock_width; i += dblock_width)
-                    {
-                        Adblock_shifted[i] = *(v_shifted++);
-                    }
-                }
+                (*A_shifted_fill) = (*v_shifted_fill++);
+                A_shifted_fill += N;
             }
         }// FOR
 
-         // * Computation of WY-representation of Householder matrices production...
-        memset(W + d1_shift*b2, 0, min(bsizes_ratio*b1, N - d1_shift)*b2*sizeof(double));
-        memset(Y + d1_shift*b2, 0, min(bsizes_ratio*b1, N - d1_shift)*b2*sizeof(double));
+        // * Computation of WY-representation of Householder matrices production...
+
+        const int set_len = min(bsizes_ratio*b1, N - d1_shift)*b2*sizeof(double);
+        memset(W + d1_shift*b2, 0, set_len);
+        memset(Y + d1_shift*b2, 0, set_len);
         for (int it = 0; it < d2; ++it)
         {
             memset(w, 0, d2*sizeof(double));
@@ -575,48 +494,18 @@ double* QR_WY_double_tiled(double* A, const TaskData& parameters)
             const int full_shift = lambda + it;
             const int b_begin = (full_shift - d1_shift) / b1;
             const int dblock_col_index = it / db2;
-            const int dblock_width = min(db2, d2 - dblock_col_index * db2);
-            // Separated value is required because W and Y matrices are
-            // always storing as N x b2 with d1 x d2 small blocks. 
-            // So, if actual width of column is less then 'b2',
-            // then form of small blocks won't change.
-            const int dblock_width_WY = min(db2, b2 - dblock_col_index*db2);
-            const int loc_it = it - dblock_col_index*db2;
 
+            // Вычисление нормы и ск. произведения вектора Хаусхолдера
             double scalar = 1.0;
             double buf;
-            for (int ib = (full_shift + 1 - d1_shift) / b1; ib < col_b_count; ++ib)
+            double* A_shifted_HV = A + (full_shift + 1)*N + full_shift;
+            double* v_shifted_HV = v + full_shift + 1;
+            for (int j = full_shift + 1; j < N; ++j)
             {
-                const int mb_shift = d1_shift + ib*b1;
-                const int i_lb = max(full_shift + 1, mb_shift) - mb_shift;
-                const int i_ub = min(mb_shift + b1, N);
-                const int ib_block_h = min(b1, N - mb_shift);
-                const double* Ablock = A + mb_shift*N + ib_block_h*d2_shift;
-
-                const int id_lb = (i_lb == 0) ? 0 : (i_lb / db1);
-                const int id_ub = (ib == col_b_count - 1) ?
-                    dblock_count_in_diff_bcol :
-                    dblock_count_in_bcol;
-                for (int id = id_lb; id < id_ub; ++id)
-                {
-                    const int loc_shift = id * db1;
-                    const int bd_shift = mb_shift + loc_shift;
-                    const int lb = max(full_shift + 1, bd_shift) - bd_shift;
-                    const int ub = min(db1, i_ub - bd_shift);
-                    const int id_block_h = min(db1, ib_block_h - loc_shift);
-                    const double* Adblock_shifted = Ablock + loc_shift*d2 +
-                        dblock_col_index*id_block_h*db2 +
-                        loc_it + lb*dblock_width;
-                    double* v_shifted = v + bd_shift + lb;
-
-                    for (int i = lb; i < ub; ++i)
-                    {
-                        buf = *Adblock_shifted;
-                        Adblock_shifted += dblock_width;
-                        scalar += buf * buf;
-                        *(v_shifted++) = buf;
-                    }
-                }
+                buf = *A_shifted_HV;
+                scalar += buf * buf;
+                (*v_shifted_HV++) = buf;
+                A_shifted_HV += N;
             }
             v[full_shift] = 1.0;
             double beta = -2.0 / scalar;
@@ -625,42 +514,20 @@ double* QR_WY_double_tiled(double* A, const TaskData& parameters)
             // (equals index of columns, which is added at current iteration)
             if (it == 0)
             {
-                // Initial first column filling
-                // Remark 1: first 'lambda' of rows in matrices W and Y are filled with zero,
+                // Initial first column filling.
+                // Remark: first 'lambda' of rows in matrices W and Y are filled with zero,
                 //           next 'd2' of rows consist lower triangular matrix.
-                // Remark 2: W and Y will be allocated with (B1,B2,D1,D2)-layout.
-                for (int ib = b_begin; ib < col_b_count; ++ib)
+                double* Y_shifted = Y + lambda*b2;
+                double* W_shifted = W + lambda*b2;
+                const double* v_shifted_WYinit = v + lambda;
+                double buf_WYinit;
+                for (int i = lambda; i < N; ++i)
                 {
-                    const int mb_shift = ib*b1 + d1_shift;
-                    const int i_lb = max(lambda, mb_shift) - mb_shift;
-                    const int i_ub = min(mb_shift + b1, N);
-                    const int ib_block_h = min(b1, N - mb_shift);
-
-                    const int id_lb = (i_lb == 0) ? 0 : (i_lb / db1);
-                    const int id_ub = (ib == col_b_count - 1) ?
-                        dblock_count_in_diff_bcol :
-                        dblock_count_in_bcol;
-                    for (int id = id_lb; id < id_ub; ++id)
-                    {
-                        const int loc_shift = id * db1;
-                        const int bd_shift = loc_shift + mb_shift;
-                        const int lb = max(lambda, bd_shift) - bd_shift;
-                        const int ub = min(db1, i_ub - bd_shift);
-                        const int id_block_h = min(db1, ib_block_h - loc_shift);
-                        // Width of block is 'b2',
-                        // because memory was allocated for complete matrices
-                        double* Ydblock = Y + bd_shift*b2 + lb*dblock_width_WY;
-                        double* Wdblock = W + (Ydblock - Y);
-                        double* v_shifted = v + bd_shift + lb;
-
-                        for (int i = lb; i < ub; ++i)
-                        {
-                            *Ydblock = *v_shifted;
-                            *Wdblock = beta * (*v_shifted++);
-                            Ydblock += dblock_width_WY;
-                            Wdblock += dblock_width_WY;
-                        }
-                    }
+                    buf_WYinit = (*v_shifted_WYinit++);
+                    *Y_shifted = buf_WYinit;
+                    *W_shifted = beta * buf_WYinit;
+                    Y_shifted += b2;
+                    W_shifted += b2;
                 }
             }
             else
@@ -675,42 +542,44 @@ double* QR_WY_double_tiled(double* A, const TaskData& parameters)
                 //    using fixed element of vector 'v'
                 for (int ib = b_begin; ib < col_b_count; ++ib)
                 {
-                    const int mb_shift = ib*b1 + d1_shift;
-                    const int ib_lb = max(full_shift, mb_shift) - mb_shift;
-                    const int ib_ub = min(mb_shift + b1, N);
-                    const int ib_block_h = min(b1, N - mb_shift);
-
-                    const int id_lb = (ib_lb == 0) ? 0 : (ib_lb / db1);
+                    const int mb_shift = d1_shift + ib * b1;
+                    const int block_lb = max(full_shift, mb_shift) - mb_shift;
+                    const int block_ub = min(mb_shift + b1, N);
+                    const int id_lb = (block_lb == 0) ? 0 : (block_lb / db1);
                     const int id_ub = (ib == col_b_count - 1) ?
                         dblock_count_in_diff_bcol :
                         dblock_count_in_bcol;
+
                     for (int id = id_lb; id < id_ub; ++id)
                     {
-                        const int loc_shift = id * db1;
-                        const int bd_shift = loc_shift + mb_shift;
+                        const int bd_shift = mb_shift + id * db1;
                         const int i_lb = max(full_shift, bd_shift) - bd_shift;
-                        const int i_ub = min(db1, ib_ub - bd_shift);
-                        const int id_block_h = min(db1, ib_block_h - loc_shift);
+                        const int i_ub = min(db1, block_ub - bd_shift);
+                        const int v_diff_val = i_ub - i_lb;
+                        const int i_lb_mult_b2 = i_lb * b2;
                         const double* Ydstripe = Y + bd_shift*b2;
-                        const double* v_shifted = v + bd_shift;
+                        const double* v_id_shifted = v + bd_shift + i_lb;
 
                         for (int jd = 0; jd < dblock_col_index + 1; ++jd)
                         {
                             const int loc_drow_shift = jd * db2;
                             const int j_ub = min(it - loc_drow_shift, db2);
-                            const int dblock_w = min(db2, b2 - loc_drow_shift);
-                            const double* Ydblock = Ydstripe + id_block_h*loc_drow_shift;
+                            const int Y_diff_val = b2 - j_ub;
+                            const double* Y_line = (Ydstripe + i_lb_mult_b2) + loc_drow_shift;
                             double* w_shifted = w + loc_drow_shift;
 
                             for (int i = i_lb; i < i_ub; ++i)
                             {
-                                const double* Yline = Ydblock + i*dblock_w;
-                                const double vi = v_shifted[i];
+                                const double vi = (*v_id_shifted++);
                                 for (int j = 0; j < j_ub; ++j)
                                 {
-                                    w_shifted[j] += Yline[j] * vi;
+                                    (*w_shifted++) += (*Y_line++) * vi;
                                 }
+                                Y_line += Y_diff_val;
+                                w_shifted -= j_ub;
                             }
+
+                            v_id_shifted -= v_diff_val;
                         }
                     }
                 }
@@ -724,58 +593,61 @@ double* QR_WY_double_tiled(double* A, const TaskData& parameters)
                 // 5. Produce passing of fixed row of W (j) and vector 'w'
                 for (int ib = 0; ib < col_b_count; ++ib)
                 {
-                    const int mb_shift = ib*b1 + d1_shift;
-                    const int ib_lb = max(lambda, mb_shift) - mb_shift;
-                    const int ib_ub = min(mb_shift + b1, N);
-                    const int ib_block_h = min(b1, N - mb_shift);
-
-                    const int id_lb = (ib_lb == 0) ? 0 : (ib_lb / db1);
+                    const int mb_shift = d1_shift + ib * b1;
+                    const int iblock_lb = max(lambda, mb_shift) - mb_shift;
+                    const int iblock_ub = min(mb_shift + b1, N);
+                    const int id_lb = (iblock_lb == 0) ? 0 : (iblock_lb / db1);
                     const int id_ub = (ib == col_b_count - 1) ?
                         dblock_count_in_diff_bcol :
                         dblock_count_in_bcol;
+
                     for (int id = id_lb; id < id_ub; ++id)
                     {
-                        const int loc_shift = id * db1;
-                        const int bd_shift = loc_shift + mb_shift;
+                        const int bd_shift = mb_shift + id * db1;
                         const int i_lb = max(lambda, bd_shift) - bd_shift;
-                        const int i_ub = min(db1, ib_ub - bd_shift);
-                        const int id_block_h = min(db1, ib_block_h - loc_shift);
+                        const int i_ub = min(db1, iblock_ub - bd_shift);
+                        const int i_lb_mult_b2 = i_lb * b2;
                         double* Wdstripe = W + bd_shift*b2;
                         double* Ydstripe = Y + (Wdstripe - W);
                         // Vector to contain results of production of W's row and vector w
-                        memset(sum_vec, 0, b1 << 3);
+                        memset(sum_vec, 0, sizeof(double)*db1);
 
                         for (int jd = 0; jd < dblock_col_index + 1; ++jd)
                         {
                             const int loc_drow_shift = jd * db2;
                             const int j_ub = min(it, loc_drow_shift + db2) - loc_drow_shift;
-                            const int dblock_w = min(db2, b2 - loc_drow_shift);
-                            double* Wdblock = Wdstripe + id_block_h*loc_drow_shift;
+                            const int diff_val = b2 - j_ub;
                             const double* w_shifted = w + loc_drow_shift;
+                            const double* Wrow = Wdstripe + i_lb_mult_b2 + loc_drow_shift;
+                            double* sum_vec_shifted = sum_vec + i_lb;
 
                             for (int i = i_lb; i < i_ub; ++i)
                             {
-                                double* Wline = Wdblock + i*dblock_w;
                                 double sum_loc = 0.0;
                                 for (int j = 0; j < j_ub; ++j)
                                 {
-                                    sum_loc += Wline[j] * w_shifted[j];
+                                    sum_loc += (*Wrow++) * (*w_shifted++);
                                 }
-                                // Scalar production of W matrix line and vector w
-                                sum_vec[i] += sum_loc;
+                                // Scalar production of W's row and vector w
+                                (*sum_vec_shifted++) += sum_loc;
+
+                                Wrow += diff_val;
+                                w_shifted -= j_ub;
                             }
                         }
                         // Insertion of computed values into 'it'-th column of Y and W
-                        const double* v_shifted = v + bd_shift + i_lb;
-                        // Pointers to small blocks containing 'it'-th column of Y and W
-                        double* Wdblock_add = Wdstripe + dblock_col_index*id_block_h*db2 + loc_it;
+                        const double* v_shifted_WYadd = v + bd_shift + i_lb;
+                        // Pointers to 'it'-th column of Y and W
+                        double* Wdblock_add = Wdstripe + i_lb_mult_b2 + it;
                         double* Ydblock_add = Ydstripe + (Wdblock_add - Wdstripe);
                         const double* sum_vec_shifted = sum_vec + i_lb;
-                        for (int i = i_lb*dblock_width_WY; i < i_ub*dblock_width_WY; i += dblock_width_WY)
+                        for (int i = i_lb; i < i_ub; ++i)
                         {
-                            buf = (*v_shifted++);
-                            Wdblock_add[i] = beta * (buf + (*sum_vec_shifted++));
-                            Ydblock_add[i] = buf;
+                            buf = (*v_shifted_WYadd++);
+                            *Wdblock_add = beta * (buf + (*sum_vec_shifted++));
+                            *Ydblock_add = buf;
+                            Wdblock_add += b2;
+                            Ydblock_add += b2;
                         }
                     }
                 }
@@ -786,89 +658,91 @@ double* QR_WY_double_tiled(double* A, const TaskData& parameters)
         // A(lamda:M-1, t:N-1) = (I + W*(Y^t))^t * A(lamda:M-1, t:N-1) (==)
         // (==) A(lamda:M-1, t:N-1) + [Y*(W^t)] * A(lamda:M-1, t:N-1)
 
-        // Constructing layout data for WY-matrix
-        WY_task_class.makeData(N, N, b1, b1, db1, db1);
-        filmat_part(WY, 0, WY_task_class.getDataRef(), d1_shift, d1_shift);
+        double* WY_shifted = WY + d1_shift*N + d1_shift;
+        for (int i = d1_shift; i < N; ++i)
+        {
+            memset(WY_shifted, 0, (N - d1_shift)*sizeof(double));
+            WY_shifted += N;
+        }
 
-        // Multiplication Y * W^t .
-        // Remark: WY matrix get (B1,B1,D1,D1)-layout.
+        // Multiplication Y * W^t.
         for (int ib = 0; ib < col_b_count; ++ib)
         {
             const int i_mb_shift = d1_shift + ib*b1;
-            const int ib_lb = max(lambda, i_mb_shift) - i_mb_shift;
-            const int ib_ub = min(i_mb_shift + b1, N);
-            const int ib_stripe_h = min(b1, N - i_mb_shift);
-            double* WYstripe = WY + i_mb_shift*N;
-
-            const int id_lb = (ib_lb == 0) ? 0 : (ib_lb / db1);
+            const int iblock_lb = max(lambda, i_mb_shift) - i_mb_shift;
+            const int iblock_ub = min(i_mb_shift + b1, N);
+            const int id_lb = (iblock_lb == 0) ? 0 : (iblock_lb / db1);
             const int id_ub = (ib == col_b_count - 1) ?
                 dblock_count_in_diff_bcol :
                 dblock_count_in_bcol;
+
             for (int jb = 0; jb < col_b_count; ++jb)
             {
                 const int j_mb_shift = d1_shift + jb*b1;
-                const int jb_lb = max(lambda, j_mb_shift) - j_mb_shift;
-                const int jb_ub = min(j_mb_shift + b1, N);
-                const int jb_stripe_h = min(b1, N - j_mb_shift);
-                double* WYblock = WYstripe + ib_stripe_h*j_mb_shift;
-
-                const int jd_lb = (jb_lb == 0) ? 0 : (jb_lb / db1);
+                const int jblock_lb = max(lambda, j_mb_shift) - j_mb_shift;
+                const int jblock_ub = min(j_mb_shift + b1, N);
+                const int jd_lb = (jblock_lb == 0) ? 0 : (jblock_lb / db1);
                 const int jd_ub = (jb == col_b_count - 1) ?
                     dblock_count_in_diff_bcol :
                     dblock_count_in_bcol;
+
                 for (int id = id_lb; id < id_ub; ++id)
                 {
-                    const int i_loc_shift = id * db1;
-                    const int i_bd_shift = i_mb_shift + i_loc_shift;
+                    const int i_bd_shift = i_mb_shift + id * db1;
                     const int i_lb = max(lambda, i_bd_shift) - i_bd_shift;
-                    const int i_ub = min(db1, ib_ub - i_bd_shift);
-                    const int id_block_h = min(db1, ib_stripe_h - i_loc_shift);
+                    const int i_ub = min(db1, iblock_ub - i_bd_shift);
+                    const int i_lb_mul_b2 = i_lb * b2;
+                    const int i_lb_mul_N = i_lb * N;
                     const double* Ydstripe = Y + i_bd_shift*b2;
-                    double* WYdstripe = WYblock + i_loc_shift*jb_stripe_h;
+                    double* WYdstripe = WY + i_bd_shift*N;
 
                     // Upper bound for 'kd'-level small-block-cycle is defined by
                     // lower triangular form of matrix Y.
                     // If 'id'-th small-block-stripe is crossing matrix diagonal,
                     // then upper bound for small-block-stripe passing equals
                     // index of small block, that is containing diagonal element
-                    // with maximum index within 'id'-th small-block-stripe height limits.
-                    const int kd_ud = (i_bd_shift < t) ?
-                        ((min(i_bd_shift + db1, ib_ub) - lambda) / db2 + 1) :
+                    // with maximum index within 'id'-th small-block-stripe height bounds.
+                    const int kd_ub = (i_bd_shift < t) ?
+                        ((min(i_bd_shift + db1, iblock_ub) - lambda) / db2 + 1) :
                         dblock_count_in_curr_block_row;
 
                     for (int jd = jd_lb; jd < jd_ub; ++jd)
                     {
-                        const int j_loc_shift = jd * db1;
-                        const int j_bd_shift = j_mb_shift + j_loc_shift;
+                        const int j_bd_shift = j_mb_shift + jd * db1;
                         const int j_lb = max(lambda, j_bd_shift) - j_bd_shift;
-                        const int j_ub = min(db1, jb_ub - j_bd_shift);
-                        const int jd_block_h = min(db1, jb_stripe_h - j_loc_shift);
+                        const int j_ub = min(db1, jblock_ub - j_bd_shift);
+                        const int j_lb_mul_b2 = j_lb * b2;
+                        const int WY_diff_val = N - (j_ub - j_lb);
                         const double* Wdstripe = W + j_bd_shift*b2;
-                        double* WYdblock = WYdstripe + id_block_h*j_loc_shift;
 
-                        for (int kd = 0; kd < kd_ud; ++kd)
+                        for (int kd = 0; kd < kd_ub; ++kd)
                         {
                             const int k_loc_shift = kd * db2;
                             const int k_ub = min(d2 - k_loc_shift, db2);
-                            const int kd_dblock_w = min(db2, b2 - k_loc_shift);
-                            const double* Ydblock = Ydstripe + id_block_h*k_loc_shift;
-                            const double* Wdblock = Wdstripe + jd_block_h*k_loc_shift;
+                            const int W_diff_val = b2 - k_ub;
 
+                            // Pointers to first row of small tile of W, Y and WY.
+                            // Declared there because maust be updated on each iteration of 'kd'.
+                            double* WYrow = (WYdstripe + i_lb_mul_N) + j_bd_shift + j_lb;
+                            const double* Yrow = (Ydstripe + i_lb_mul_b2) + k_loc_shift;
                             for (int i = i_lb; i < i_ub; ++i)
                             {
-                                double* WYrow = WYdblock + i*jd_block_h + j_lb;
-                                const double* Yrow = Ydblock + i*kd_dblock_w;
-
+                                const double* const Yrow_save = Yrow;
+                                const double* Wrow = (Wdstripe + j_lb_mul_b2) + k_loc_shift;
                                 for (int j = j_lb; j < j_ub; ++j)
                                 {
-                                    const double* Wrow = Wdblock + j*kd_dblock_w;
                                     double sum = 0.0;
                                     for (int k = 0; k < k_ub; ++k)
                                     {
-                                        sum += Yrow[k] * (*Wrow++);
+                                        sum += (*Yrow++) * (*Wrow++);
                                     }
                                     (*WYrow++) += sum;
+
+                                    Yrow = Yrow_save;
+                                    Wrow += W_diff_val;
                                 }
+                                Yrow += b2;
+                                WYrow += WY_diff_val;
                             }
                         }
                     }
@@ -876,93 +750,98 @@ double* QR_WY_double_tiled(double* A, const TaskData& parameters)
             }
         }
 
-        filmat_part(Abuf, A, parameters, d1_shift, d2_shift);
+        const double* A_shifted = A + d1_shift*N + d2_shift;
+        double* Abuf_shifted = Abuf + (A_shifted - A);
+        for (int i = d1_shift; i < N; ++i)
+        {
+            memcpy(
+                Abuf_shifted,
+                A_shifted,
+                (N - d2_shift) * sizeof(double));
+            A_shifted += N;
+            Abuf_shifted += N;
+        }
 
         // Multiplication A(lamda:N-1, t:N-1) += (Y * W^t) * A(lamda:M-1, t:N-1) <=>
         //                A(lamda:N-1, t:N-1) += WY * A(lamda:N-1, t:N-1) .
         // Layout pattern: (b1 x b2, d1 x d2) = (b1 x b1, d1 x d1) * (b1 x b2, d1 x d2).
+        // Result of multiplication is added to temporal buffer 'Abuf',
+        // which is already contain elements of 'A'.
+        // It allows to avoid using of elements of matrix 'A',
+        // which have results of multiplication, when we need their old values.
         for (int ib = 0; ib < col_b_count; ++ib)
         {
             const int i_mb_shift = d1_shift + ib*b1;
-            const int ib_lb = max(lambda, i_mb_shift) - i_mb_shift;
-            const int ib_ub = min(i_mb_shift + b1, N);
-            const int ib_stripe_h = min(b1, N - i_mb_shift);
-            // Pointer to beginning of 'ib'-th big-block-stripe of WY matrix
-            const double* WY_stripe = WY + i_mb_shift*N;
-            // Pointer to beginning of 'ib'-th big-block-stripe of buffer matrix
-            double* Abuf_stripe = Abuf + (WY_stripe - WY);
-
-            const int id_lb = (ib_lb == 0) ? 0 : (ib_lb / db1);
+            const int iblock_lb = max(lambda, i_mb_shift) - i_mb_shift;
+            const int iblock_ub = min(i_mb_shift + b1, N);
+            const int id_lb = (iblock_lb == 0) ? 0 : (iblock_lb / db1);
             const int id_ub = (ib == col_b_count - 1) ?
                 dblock_count_in_diff_bcol :
                 dblock_count_in_bcol;
+
             for (int jb = 0; jb < row_b_count; ++jb)
             {
                 const int j_mb_shift = t + jb*b2;
-                const int jb_ub = min(j_mb_shift + b2, N);
-                const int jb_column_w = min(b2, N - j_mb_shift);
-                double* Abuf_block = Abuf_stripe + j_mb_shift*ib_stripe_h;
-
+                const int jblock_ub = min(j_mb_shift + b2, N);
                 const int jd_ub = (jb == row_b_count - 1) ?
                     dblock_count_in_diff_brow :
                     dblock_count_in_brow;
+
                 for (int kb = 0; kb < col_b_count; ++kb)
                 {
                     const int k_mb_shift = d1_shift + kb*b1;
-                    const int kb_lb = max(lambda, k_mb_shift) - k_mb_shift;
-                    const int kb_ub = min(k_mb_shift + b1, N);
-                    const int kb_stripe_h = min(b1, N - k_mb_shift);
-                    const double* WY_block = WY_stripe + ib_stripe_h*k_mb_shift;
-                    const double* A_block = A + k_mb_shift*N + j_mb_shift*kb_stripe_h;
-
-                    const int kd_lb = (kb_lb == 0) ? 0 : (kb_lb / db1);
+                    const int kblock_lb = max(lambda, k_mb_shift) - k_mb_shift;
+                    const int kblock_ub = min(k_mb_shift + b1, N);
+                    const int kd_lb = (kblock_lb == 0) ? 0 : (kblock_lb / db1);
                     const int kd_ub = (kb == col_b_count - 1) ?
                         dblock_count_in_diff_bcol :
                         dblock_count_in_bcol;
+
                     for (int id = id_lb; id < id_ub; ++id)
                     {
-                        const int i_loc_shift = id * db1;
-                        const int i_bd_shift = i_mb_shift + i_loc_shift;
+                        const int i_bd_shift = i_mb_shift + id * db1;
                         const int i_lb = max(lambda, i_bd_shift) - i_bd_shift;
-                        const int i_ub = min(db1, ib_ub - i_bd_shift);
-                        const int id_block_h = min(db1, ib_stripe_h - i_loc_shift);
-                        const double* WY_dstripe = WY_block + i_loc_shift*kb_stripe_h;
-                        double* Abuf_dstripe = Abuf_block + i_loc_shift*jb_column_w;
+                        const int i_ub = min(db1, iblock_ub - i_bd_shift);
+                        const int i_lb_mul_N = i_lb * N;
+                        double* Abuf_dstripe = Abuf + i_bd_shift*N;
+                        const double* WY_dstripe = WY + (Abuf_dstripe - Abuf);
 
                         for (int jd = 0; jd < jd_ub; ++jd)
                         {
-                            const int j_loc_shift = jd * db2;
-                            const int j_bd_shift = j_mb_shift + j_loc_shift;
-                            const int j_ub = min(j_bd_shift + db2, jb_ub) - j_bd_shift;
-                            const int jd_column_w = min(db2, jb_column_w - j_loc_shift);
-                            double* Abuf_dblock = Abuf_dstripe + id_block_h*j_loc_shift;
+                            const int j_bd_shift = j_mb_shift + jd * db2;
+                            const int j_ub = min(j_bd_shift + db2, jblock_ub) - j_bd_shift;
+                            const int Abuf_dif_value = N - j_ub;
+                            // Points to first row of ['id','jd'] small tile of 'Abuf'
+                            double* Abuf_dstripe_shifted = (Abuf_dstripe + i_lb_mul_N) + j_bd_shift;
 
-                            // Remaining 'kd'-loop iterations
                             for (int kd = kd_lb; kd < kd_ub; ++kd)
                             {
-                                const int k_loc_shift = kd * db1;
-                                const int k_bd_shift = k_mb_shift + k_loc_shift;
-                                const int k_ub = min(k_bd_shift + db1, kb_ub) - k_bd_shift;
-                                const int kd_block_h = min(db1, kb_stripe_h - k_loc_shift);
-                                const double* WY_dblock = WY_dstripe + id_block_h*k_loc_shift;
-                                const double* A_dblock = A_block +
-                                    k_loc_shift*jb_column_w + kd_block_h*j_loc_shift;
+                                const int k_bd_shift = k_mb_shift + kd * db1;
+                                const int k_ub = min(k_bd_shift + db1, kblock_ub) - k_bd_shift;
+                                // Points to 'i_lb'-th row of ['id','kd'] small tile of 'WY'
+                                const double* WY_dstripe_shifted = (WY_dstripe + i_lb_mul_N) + k_bd_shift;
+                                // Points to first row of ['kd','jd'] small tile of 'A'
+                                const double* A_dstripe_shifted = (A + k_bd_shift*N) + j_bd_shift;
 
+                                double* Abuf_row = Abuf_dstripe_shifted;
                                 for (int i = i_lb; i < i_ub; ++i)
                                 {
-                                    double* Abuf_row = Abuf_dblock + i*jd_column_w;
-                                    const double* WY_row = WY_dblock + i*kd_block_h;
+                                    const double* WY_row = WY_dstripe_shifted;
                                     for (int j = 0; j < j_ub; ++j)
                                     {
-                                        const double* A_dblock_shifted = A_dblock + j;
+                                        const double* A_row = A_dstripe_shifted + j;
                                         double sum = 0.0;
                                         for (int k = 0; k < k_ub; ++k)
                                         {
-                                            sum += WY_row[k] * (*A_dblock_shifted);
-                                            A_dblock_shifted += jd_column_w;
+                                            sum += (*WY_row++) * (*A_row);
+                                            A_row += N;
                                         }
                                         (*Abuf_row++) += sum;
+                                        
+                                        WY_row -= k_ub;
                                     }
+                                    Abuf_row += Abuf_dif_value;
+                                    WY_dstripe_shifted += N;
                                 }
                             }
                         }
@@ -971,7 +850,17 @@ double* QR_WY_double_tiled(double* A, const TaskData& parameters)
             }
         }
 
-        filmat_part(A, Abuf, parameters, d1_shift, d2_shift);
+        double* A_shifted_toUpdate = A + d1_shift*N + d2_shift;
+        const double* Abuf_shifted_toUpdate = Abuf + (A_shifted_toUpdate - A);
+        for (int i = d1_shift; i < N; ++i)
+        {
+            memcpy(
+                A_shifted_toUpdate,
+                Abuf_shifted_toUpdate,
+                (N - d2_shift) * sizeof(double));
+            A_shifted_toUpdate += N;
+            Abuf_shifted_toUpdate += N;
+        }
     }// WHILE
 
     delete[] v;
@@ -1285,8 +1174,12 @@ double* QR_WY_block(double* A, const TaskData& parameters)
                     {
                         sum += Ablock[k*d2 + j] * v_kb_shift[k];
                     }
-                    w[j] += beta * sum;
+                    w[j] += sum;
                 }
+            }
+            for (int k = it; k < d2; ++k)
+            {
+                w[k] *= beta;
             }
 
             // Преобразование текущего блока матрицы A
@@ -1659,7 +1552,7 @@ double* QR_WY_double_block(double* A, const TaskData& parameters)
     double* Y = new double[N * b2];
     double* WY = new double[N * N];
     double* Abuf = new double[N * N];
-    double* sum_vec = new double[b1];
+    double* sum_vec = new double[db1];
 
     int curr_i_block_ind = -1;
     int curr_j_block_ind = -1;
@@ -1849,10 +1742,14 @@ double* QR_WY_double_block(double* A, const TaskData& parameters)
                                 sum += Adblock_shifted[k] * (*(v_kd_shifted++));
                             }
                             v_kd_shifted -= (ub - lb);
-                            w_shifted[j] += beta * sum;
+                            w_shifted[j] += sum;
                         }
                     }
                 }
+            }
+            for (int k = it; k < d2; ++k)
+            {
+                w[k] *= beta;
             }
 
             // Transformation of current block column of matrix A:
@@ -2115,7 +2012,7 @@ double* QR_WY_double_block(double* A, const TaskData& parameters)
                         double* Wdstripe = W + bd_shift*b2;
                         double* Ydstripe = Y + (Wdstripe - W);
                         // Vector to contain results of production of W's row and vector w
-                        memset(sum_vec, 0, b1 << 3);
+                        memset(sum_vec, 0, db1 << 3);
 
                         for (int jd = 0; jd < dblock_col_index + 1; ++jd)
                         {

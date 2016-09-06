@@ -95,9 +95,9 @@ Blocks select_optimal_double_block_size_multiplication(const unsigned int N,
             realloc_time = (clock() - time_) / (1.0 * CLOCKS_PER_SEC);
 
             time_ = clock();
-            block_matrix_multiplication_double_tiled(generator, 
-                                                     left_copy, right_copy,
-                                                     task_data, task_data);
+            matrix_multiplication_double_block(generator,
+                                               left_copy, right_copy,
+                                               task_data, task_data);
             mul_time = (clock() - time_) / (1.0 * CLOCKS_PER_SEC);
             res_time = mul_time + realloc_time;
 
@@ -196,8 +196,8 @@ unsigned int select_optimal_block_size_multiplication(
         realloc_time = (clock() - time_) / (1.0 * CLOCKS_PER_SEC);
 
         time_ = clock();
-        block_matrix_multiplication_tiled(generator, left_copy, right_copy,
-                                          task_data, task_data);
+        matrix_multiplication_block(generator, left_copy, right_copy,
+                                    task_data, task_data);
         mul_time = (clock() - time_) / (1.0 * CLOCKS_PER_SEC);
         res_time = mul_time + realloc_time;        
 
@@ -357,7 +357,7 @@ void matrix_multiplication_tests(const TaskClass& params_left,
         printf("  > Блочное умножение матриц (тайлинг)...          ");
     }
     time_ = clock();
-    block_matrix_multiplication_tiled(gen_mat, left_mat, rgt_mat,
+    matrix_multiplication_block(gen_mat, left_mat, rgt_mat,
                                       params_left, params_right);
     time_ = (clock() - time_) / (1.0 * CLOCKS_PER_SEC);
     fprintf(log_file, "[ %.3lf секунд ]\n", time_);
@@ -422,7 +422,7 @@ void matrix_multiplication_tests(const TaskClass& params_left,
         printf("  > Блочное умножение матриц (двойной тайлинг)...  ");
     }
     time_ = clock();
-    block_matrix_multiplication_double_tiled(gen_mat, left_mat, rgt_mat,
+    matrix_multiplication_double_block(gen_mat, left_mat, rgt_mat,
                                              params_left, params_right);
     time_ = (clock() - time_) / (1.0 * CLOCKS_PER_SEC);
     fprintf(log_file, "[ %.3lf секунд ]\n", time_);
@@ -789,7 +789,7 @@ void qralg_test(const TaskClass& parameters,
     }
     
     double* mat_t = new double[N*N];
-//    double* mat_dt = new double[N*N];
+    double* mat_dt = new double[N*N];
     double* mat_b = new double[N*N];
     double* mat_db = new double[N*N];
     double* mat_st = new double[N*N];
@@ -811,7 +811,7 @@ void qralg_test(const TaskClass& parameters,
     double time_ = clock();
     generate(mat_st, N, N);
     memcpy(mat_t, mat_st, N*N*sizeof(double));
- //   memcpy(mat_dt, mat_st, N*N*sizeof(double));
+    memcpy(mat_dt, mat_st, N*N*sizeof(double));
     memcpy(mat_b, mat_st, N*N*sizeof(double));
     memcpy(mat_db, mat_st, N*N*sizeof(double));
     time_ = (clock() - time_) / (1.0 * CLOCKS_PER_SEC);
@@ -849,7 +849,7 @@ void qralg_test(const TaskClass& parameters,
         printf("[ %.3lf секунд ]\n", time_);
     }
 
-  /*  fprintf(log_file, "  > QR-алгоритм с двойным тайлингом (WY-разложение)... ");
+    fprintf(log_file, "  > QR-алгоритм с двойным тайлингом (WY-разложение)... ");
     if (console_info_output)
     {
         printf("  > QR-алгоритм с двойным тайлингом (WY-разложение)... ");
@@ -861,7 +861,7 @@ void qralg_test(const TaskClass& parameters,
     if (console_info_output)
     {
         printf("[ %.3lf секунд ]\n", time_);
-    }*/
+    }
 
     fprintf(log_file, "  > Блочное переразмещение...                          ");
     if (console_info_output)
@@ -951,46 +951,46 @@ void qralg_test(const TaskClass& parameters,
 
     const double comparison_dbst = compare_arrays(mat_db, mat_st, N*N);
     const double comparison_dbt  = compare_arrays(mat_db, mat_t, N*N) ;
- //   const double comparison_dbdt = compare_arrays(mat_db, mat_dt, N*N);
+    const double comparison_dbdt = compare_arrays(mat_db, mat_dt, N*N);
     const double comparison_dbb  = compare_arrays(mat_db, mat_b, N*N);
     const double comparison_bst  = compare_arrays(mat_b, mat_st, N*N);
     const double comparison_bt   = compare_arrays(mat_b, mat_t, N*N);
- //   const double comparison_bdt  = compare_arrays(mat_b, mat_dt, N*N);
- //   const double comparison_dtst = compare_arrays(mat_dt, mat_st, N*N);
- //   const double comparison_dtt  = compare_arrays(mat_dt, mat_t, N*N);
+    const double comparison_bdt  = compare_arrays(mat_b, mat_dt, N*N);
+    const double comparison_dtst = compare_arrays(mat_dt, mat_st, N*N);
+    const double comparison_dtt  = compare_arrays(mat_dt, mat_t, N*N);
     const double comparison_tst  = compare_arrays(mat_t, mat_st, N*N);
 
     fprintf(log_file, "  > Попарное сравнение результатов:\n");
     fprintf(log_file, "    DIFFERENCE DB - S  [ %.6lf ]\n", comparison_dbst);
     fprintf(log_file, "    DIFFERENCE DB - T  [ %.6lf ]\n", comparison_dbt);
- //   fprintf(log_file, "    DIFFERENCE DB - DT [ %.6lf ]\n", comparison_dbdt);
+    fprintf(log_file, "    DIFFERENCE DB - DT [ %.6lf ]\n", comparison_dbdt);
     fprintf(log_file, "    DIFFERENCE DB - B  [ %.6lf ]\n", comparison_dbb);
     fprintf(log_file, "    DIFFERENCE B  - S  [ %.6lf ]\n", comparison_bst);
     fprintf(log_file, "    DIFFERENCE B  - T  [ %.6lf ]\n", comparison_bt);
- //   fprintf(log_file, "    DIFFERENCE B  - DT [ %.6lf ]\n", comparison_bdt);
- //   fprintf(log_file, "    DIFFERENCE DT - S  [ %.6lf ]\n", comparison_dtst);
- //   fprintf(log_file, "    DIFFERENCE DT - T  [ %.6lf ]\n", comparison_dtt);
+    fprintf(log_file, "    DIFFERENCE B  - DT [ %.6lf ]\n", comparison_bdt);
+    fprintf(log_file, "    DIFFERENCE DT - S  [ %.6lf ]\n", comparison_dtst);
+    fprintf(log_file, "    DIFFERENCE DT - T  [ %.6lf ]\n", comparison_dtt);
     fprintf(log_file, "    DIFFERENCE T  - S  [ %.6lf ]\n", comparison_tst);
     if (console_info_output)
     {
         printf("  > Попарное сравнение результатов:\n");
         printf("    DIFFERENCE DB - S  [ %.6lf ]\n", comparison_dbst);
         printf("    DIFFERENCE DB - T  [ %.6lf ]\n", comparison_dbt);
-  //      printf("    DIFFERENCE DB - DT [ %.6lf ]\n", comparison_dbdt);
+        printf("    DIFFERENCE DB - DT [ %.6lf ]\n", comparison_dbdt);
         printf("    DIFFERENCE DB - B  [ %.6lf ]\n", comparison_dbb);
         printf("    DIFFERENCE B  - S  [ %.6lf ]\n", comparison_bst);
         printf("    DIFFERENCE B  - T  [ %.6lf ]\n", comparison_bt);
-  //      printf("    DIFFERENCE B  - DT [ %.6lf ]\n", comparison_bdt);
-  //      printf("    DIFFERENCE DT - S  [ %.6lf ]\n", comparison_dtst);
-  //      printf("    DIFFERENCE DT - T  [ %.6lf ]\n", comparison_dtt);
-  //      printf("    DIFFERENCE T  - S  [ %.6lf ]\n", comparison_tst);
+        printf("    DIFFERENCE B  - DT [ %.6lf ]\n", comparison_bdt);
+        printf("    DIFFERENCE DT - S  [ %.6lf ]\n", comparison_dtst);
+        printf("    DIFFERENCE DT - T  [ %.6lf ]\n", comparison_dtt);
+        printf("    DIFFERENCE T  - S  [ %.6lf ]\n", comparison_tst);
     }
     
     fclose(log_file);
     
     delete[] mat_st;
     delete[] mat_t;
-//    delete[] mat_dt;
+    delete[] mat_dt;
     delete[] mat_b;
     delete[] mat_db;
 }
