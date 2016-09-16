@@ -11,13 +11,13 @@
 
 using std::min;
 
-Blocks select_optimal_double_block_size_multiplication(const unsigned int N,
-    const unsigned int start_block_val,
-    const unsigned int end_block_val,
-    const unsigned int selection_block_step,
-    const unsigned int start_double_block_val,
-    const unsigned int end_double_block_val,
-    const unsigned int selection_double_block_step,
+Blocks select_optimal_double_block_size_multiplication(const int N,
+    const int start_block_val,
+    const int end_block_val,
+    const int selection_block_step,
+    const int start_double_block_val,
+    const int end_double_block_val,
+    const int selection_double_block_step,
     const bool         console_info_output)
 {
     FILE* log_file;
@@ -64,19 +64,19 @@ Blocks select_optimal_double_block_size_multiplication(const unsigned int N,
     double min_res_time = DBL_MAX;
     double min_mul_time = DBL_MAX;
     double time_, realloc_time, mul_time, res_time;
-    unsigned int optimal_block_by_wt = start_double_block_val;
-    unsigned int optimal_block_by_mt = start_double_block_val;
-    unsigned int optimal_d_block_by_wt = start_double_block_val;
-    unsigned int optimal_d_block_by_mt = start_double_block_val;
+    int optimal_block_by_wt = start_double_block_val;
+    int optimal_block_by_mt = start_double_block_val;
+    int optimal_d_block_by_wt = start_double_block_val;
+    int optimal_d_block_by_mt = start_double_block_val;
         
-    for (unsigned int block_size = start_block_val;
+    for (int block_size = start_block_val;
                       block_size <= end_block_val;
                       block_size += selection_block_step)
     {
-        const unsigned int lower_bound = min(block_size - 1, start_double_block_val);
-        const unsigned int upper_bound = min(block_size - 1, end_double_block_val);
+        const int lower_bound = min(block_size - 1, start_double_block_val);
+        const int upper_bound = min(block_size - 1, end_double_block_val);
 
-        for (unsigned int double_block_size = lower_bound;
+        for (int double_block_size = lower_bound;
                           double_block_size <= upper_bound;
                           double_block_size += selection_double_block_step)
         {
@@ -155,11 +155,11 @@ Blocks select_optimal_double_block_size_multiplication(const unsigned int N,
     return result;
 }
 
-unsigned int select_optimal_block_size_multiplication(
-                                       const unsigned int N,
-                                       const unsigned int start_block_val,
-                                       const unsigned int end_block_val,
-                                       const unsigned int selection_step)
+int select_optimal_block_size_multiplication(
+                                       const int N,
+                                       const int start_block_val,
+                                       const int end_block_val,
+                                       const int selection_step)
 {
     double* left_matrix = new double[N*N];
     double* right_matrix = new double[N*N];
@@ -176,13 +176,13 @@ unsigned int select_optimal_block_size_multiplication(
     double min_res_time = DBL_MAX;
     double min_mul_time = DBL_MAX;
     double time_, realloc_time, mul_time, res_time;
-    unsigned int optimal_by_whole_time = start_block_val;
-    unsigned int optimal_by_mul_time = start_block_val;
+    int optimal_by_whole_time = start_block_val;
+    int optimal_by_mul_time = start_block_val;
 
     printf("\n [> Подбор размера блока...\n");
     printf("    Параметры: Размер матрицы = %d, перебор от %d до %d с шагом %d\n",
                   N, start_block_val, end_block_val, selection_step);
-    for (unsigned int block_size = start_block_val; block_size <= end_block_val; block_size += selection_step)
+    for (int block_size = start_block_val; block_size <= end_block_val; block_size += selection_step)
     {
         memcpy(left_copy, left_matrix, N*N*sizeof(double));
         memcpy(right_copy, right_matrix, N*N*sizeof(double));
@@ -582,11 +582,11 @@ void floyd_test(const TaskClass& parameters,
     delete[] matrix_copy;
 }
 
-unsigned int select_optimal_block_size_floyd(
-    const unsigned int N,
-    const unsigned int start_block_val,
-    const unsigned int end_block_val,
-    const unsigned int selection_step)
+int select_optimal_block_size_floyd(
+    const int N,
+    const int start_block_val,
+    const int end_block_val,
+    const int selection_step)
 {
     double* original = new double[N*N];
     double* matrix = new double[N*N];
@@ -599,13 +599,13 @@ unsigned int select_optimal_block_size_floyd(
     double min_res_time = DBL_MAX;
     double min_alg_time = DBL_MAX;
     double time_, realloc_time, alg_time, res_time;
-    unsigned int optimal_by_whole_time = start_block_val;
-    unsigned int optimal_by_alg_time = start_block_val;
+    int optimal_by_whole_time = start_block_val;
+    int optimal_by_alg_time = start_block_val;
 
     printf("\n [> Подбор размера блока (алгоритм Флойда)...\n");
     printf("    Параметры: Размер матрицы = %d, перебор от %d до %d с шагом %d\n",
         N, start_block_val, end_block_val, selection_step);
-    for (unsigned int block_size = start_block_val; block_size <= end_block_val; block_size += selection_step)
+    for (int block_size = start_block_val; block_size <= end_block_val; block_size += selection_step)
     {
         memcpy(matrix, original, N*N*sizeof(double));
 

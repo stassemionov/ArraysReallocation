@@ -103,9 +103,9 @@ bool m_find(const int val, const vector<int>& vec)
         return false;
     }
 
-    int l = 0;
+    int l(0);
     int r = static_cast<int>(vec.size()) - 1;
-    int m = 0;
+    int m(0);
     while (l < r)
     {
         m = (l + r) >> 1;
@@ -213,7 +213,7 @@ TaskClass* read_qr_parameters(const string& file_name)
     return params;
 }
 
-void filmat_part(double* dst_ptr,
+void copy_minor_double_block(double* dst_ptr,
     const double* src_ptr,
     const TaskData& layout_data,
     const int row_coord,
@@ -416,7 +416,7 @@ void filmat_part(double* dst_ptr,
     }
 }
 
-void filmat_part(double* dst_ptr,
+void set_minor_double_block(double* dst_ptr,
     const int val,
     const TaskData& layout_data,
     const int row_coord,
@@ -583,5 +583,198 @@ void filmat_part(double* dst_ptr,
         const int ib_block_h = min(b1, N - i_mb_shift);
         const int shift = ib_block_h*(d2_shift + real_b2);
         memset(dst_ptr + i_mb_shift*N + shift, val, (ib_block_h*N - shift)*sizeof(double));
+    }
+}
+
+void copy_minor_block(double* dst_ptr,
+    const double* src_ptr,
+    const TaskData& layout_data,
+    const int row_coord,
+    const int col_coord)
+{
+    // Main parameters of data layout
+    const int N = layout_data.M_ROWS;
+    const int b1 = layout_data.B_ROWS;
+    const int b2 = layout_data.B_COLS;
+
+    if (row_coord >= N || col_coord >= N)
+    {
+        return;
+    }
+
+    // Big blocks counts in matrix
+    const int block_count_in_col = static_cast<int>(ceil(1.0 * N / b1));
+    const int block_count_in_row = static_cast<int>(ceil(1.0 * N / b2));
+    // Indices of big block, that contains element (row_coord, col_coord)
+    const int curr_i_block_ind = row_coord / b1;
+    const int curr_j_block_ind = col_coord / b2;
+    // Horizontal and vertical shifts to corner big block
+    const int d1_shift = curr_i_block_ind * b1;
+    const int d2_shift = curr_j_block_ind * b2;
+    // Real values of height/width of current block-stripe/column
+    const int real_b1 = min(b1, N - d1_shift);
+    const int real_b2 = min(b2, N - d2_shift);
+    // Corner coordinates in its big block
+    const int loc_row_coord = row_coord - d1_shift;
+    const int loc_col_coord = col_coord - d2_shift;
+
+    double* dst_stripe = dst_ptr + d1_shift * N;
+    const double* src_stripe = src_ptr + (dst_stripe - dst_ptr);
+
+    // * Copy of corner incomplete block
+
+    // Pointers to first element to copy in corner block
+    const double* src_row_shifted_CORNER = src_stripe + real_b1*d2_shift +
+        loc_row_coord*real_b2 + loc_col_coord;
+    double* dst_row_shifted_CORNER = dst_stripe +
+        (src_row_shifted_CORNER - src_stripe);
+    const size_t copy_size_CORNER = (real_b2 - loc_col_coord) * sizeof(double);
+    for (int i = loc_row_coord; i < real_b1; ++i)
+    {
+        memcpy(dst_row_shifted_CORNER,
+            src_row_shifted_CORNER,
+            copy_size_CORNER);
+        dst_row_shifted_CORNER += real_b2;
+        src_row_shifted_CORNER += real_b2;
+    }
+
+    // * Copy of first big-block-stripe, which can be incomplete
+    for (int jb = curr_j_block_ind + 1; jb < block_count_in_row; ++jb)
+    {
+        const int jb_shift = jb * b2;
+        const int jb_block_width = min(b2, N - jb_shift);
+        const size_t copy_size = jb_block_width * sizeof(double);
+        const double* src_row = src_stripe + jb_shift * real_b1 +
+            loc_row_coord * jb_block_width;
+        double* dst_row = dst_stripe + (src_row - src_stripe);
+        for (int i = loc_row_coord; i < real_b1; ++i)
+        {
+            memcpy(dst_row, src_row, copy_size);
+            dst_row += jb_block_width;
+            src_row += jb_block_width;
+        }
+    }
+
+    // * Copy of first big-block-column, which can be incomplete
+    const size_t copy_size_LEFT = (real_b2 - loc_col_coord) * sizeof(double);
+    for (int ib = curr_i_block_ind + 1; ib < block_count_in_col; ++ib)
+    {
+        const int ib_shift = ib * b1;
+        const int ib_block_h = min(b1, N - ib_shift);
+        double* dst_row = dst_ptr + ib_shift * N +
+            ib_block_h * d2_shift + loc_col_coord;
+        const double* src_row = src_ptr + (dst_row - dst_ptr);
+
+        for (int i = 0; i < ib_block_h; ++i)
+        {
+            memcpy(dst_row, src_row, copy_size_LEFT);
+            dst_row += real_b2;
+            src_row += real_b2;
+        }
+    }
+
+    // * Copy of remaining part of source matrix
+    const int main_part_shift = d2_shift + real_b2;
+    const int main_part_width_in_bytes = (N - main_part_shift) * sizeof(double);
+    for (int ib = curr_i_block_ind + 1; ib < block_count_in_col; ++ib)
+    {
+        const int ib_shift = ib * b1;
+        const int ib_block_h = min(b1, N - ib_shift);
+        double* dst_block = dst_ptr + ib_shift * N +
+            ib_block_h * main_part_shift;
+        const double* src_block = src_ptr + (dst_block - dst_ptr);
+
+        memcpy(dst_block, src_block, ib_block_h * main_part_width_in_bytes);
+    }
+}
+
+void set_minor_block(double* dst_ptr,
+    const int val,
+    const TaskData& layout_data,
+    const int row_coord,
+    const int col_coord)
+{
+    // Main parameters of data layout
+    const int N = layout_data.M_ROWS;
+    const int b1 = layout_data.B_ROWS;
+    const int b2 = layout_data.B_COLS;
+
+    if (row_coord >= N || col_coord >= N)
+    {
+        return;
+    }
+
+    // Big blocks counts in matrix
+    const int block_count_in_col = static_cast<int>(ceil(1.0 * N / b1));
+    const int block_count_in_row = static_cast<int>(ceil(1.0 * N / b2));
+    // Indices of big block, that contains element (row_coord, col_coord)
+    const int curr_i_block_ind = row_coord / b1;
+    const int curr_j_block_ind = col_coord / b2;
+    // Horizontal and vertical shifts to corner big block
+    const int d1_shift = curr_i_block_ind * b1;
+    const int d2_shift = curr_j_block_ind * b2;
+    // Real values of height/width of current block-stripe/column
+    const int real_b1 = min(b1, N - d1_shift);
+    const int real_b2 = min(b2, N - d2_shift);
+    // Corner coordinates in its big block
+    const int loc_row_coord = row_coord - d1_shift;
+    const int loc_col_coord = col_coord - d2_shift;
+
+    double* dst_stripe = dst_ptr + d1_shift * N;
+
+    // * Set value for elements of corner incomplete block
+
+    // Pointer to first element to copy in corner block
+    double* dst_row_shifted_CORNER = dst_stripe + real_b1*d2_shift +
+        loc_row_coord*real_b2 + loc_col_coord;
+    const size_t copy_size_CORNER = (real_b2 - loc_col_coord) * sizeof(double);
+    for (int i = loc_row_coord; i < real_b1; ++i)
+    {
+        memset(dst_row_shifted_CORNER, val, copy_size_CORNER);
+        dst_row_shifted_CORNER += real_b2;
+    }
+
+    // * Set value for elements of first big-block-stripe, which can be incomplete
+    for (int jb = curr_j_block_ind + 1; jb < block_count_in_row; ++jb)
+    {
+        const int jb_shift = jb * b2;
+        const int jb_block_width = min(b2, N - jb_shift);
+        const size_t copy_size = jb_block_width * sizeof(double);
+        double* dst_row = dst_stripe + jb_shift * real_b1 +
+            loc_row_coord * jb_block_width;
+        for (int i = loc_row_coord; i < real_b1; ++i)
+        {
+            memset(dst_row, 0, copy_size);
+            dst_row += jb_block_width;
+        }
+    }
+
+    // * Copy of first big-block-column, which can be incomplete
+    const size_t copy_size_LEFT = (real_b2 - loc_col_coord) * sizeof(double);
+    for (int ib = curr_i_block_ind + 1; ib < block_count_in_col; ++ib)
+    {
+        const int ib_shift = ib * b1;
+        const int ib_block_h = min(b1, N - ib_shift);
+        double* dst_row = dst_ptr + ib_shift * N +
+            ib_block_h * d2_shift + loc_col_coord;
+
+        for (int i = 0; i < ib_block_h; ++i)
+        {
+            memset(dst_row, 0, copy_size_LEFT);
+            dst_row += real_b2;
+        }
+    }
+
+    // * Copy of remaining part of source matrix
+    const int main_part_shift = d2_shift + real_b2;
+    const int main_part_width_in_bytes = (N - main_part_shift) * sizeof(double);
+    for (int ib = curr_i_block_ind + 1; ib < block_count_in_col; ++ib)
+    {
+        const int ib_shift = ib * b1;
+        const int ib_block_h = min(b1, N - ib_shift);
+        double* dst_block = dst_ptr + ib_shift * N +
+            ib_block_h * main_part_shift;
+
+        memset(dst_block, 0, ib_block_h * main_part_width_in_bytes);
     }
 }
