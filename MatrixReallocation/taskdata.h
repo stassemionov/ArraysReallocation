@@ -213,6 +213,8 @@ struct BlockReallocationInfo
     // Parameters of reallocation
     TaskClass main_data;
     TaskClass main_data_addit;
+
+    ~BlockReallocationInfo() {}
 };
 
 struct DoubleBlockReallocationInfo

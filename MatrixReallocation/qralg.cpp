@@ -1180,12 +1180,11 @@ double* QR_WY_block(double* A, const TaskData& parameters)
     const int block_count_in_row = static_cast<int>(ceil(1.0 * N / b2));
 
     double* work_memory = reinterpret_cast<double*>(
-        calloc(N + b2 + 2*N*b2 + 2*N*N + b1, sizeof(double)));
+        calloc(N + b2 + 2*N*b2 + 2*N*N, sizeof(double)));
 
     double* v =       new(work_memory)  double[N];
     double* w =       new(v + N)        double[b2];
-    double* sum_vec = new(w + b2)       double[b1];
-    double* W =       new(sum_vec + b1) double[N*b2];
+    double* W =       new(w + b2) double[N*b2];
     double* Y =       new(W + N*b2)     double[N*b2];
     double* WY =      new(Y + N*b2)     double[N*N];
     double* Abuf =    new(WY + N*N)     double[N*N];

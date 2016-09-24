@@ -6,10 +6,6 @@
 #include <fstream>
 #include <ctime>
 
-#include "qralg.h"
-
-using std::ifstream;
-
 // Сделать!
 //  1) Сократить просмотр больших промежутков при поиске нового цикла                    (СЛОЖНО)
 //  2) Определить более надежное условие параллельности циклов (да и это не подводит..)  (СРЕДНЕ)
@@ -36,19 +32,27 @@ using std::ifstream;
 // 18) Применить исключения для обработки ошибок                                         (ПРОСТО)
 // 19) Поменять int на size_t там, где идет передача в функцию с size_t-параметром       (ПРОСТО)
 // 20) Подумать есть ли нетривиальная верхняя (нижняя) граница для числа циклов?         (СЛОЖНО)
-
+// 21) Реструктурировать файловую структуру проекта                                      (ПРОСТО)
+// 22) Заменить 'TaskData' на конкретные параметры в разделе тестов                      (ПРОСТО)
+// 23) Добавить поддержку очистки кэша в release функциях для объективности тестов       (ПРОСТО)
+// 24) Убрать не-release функции                                                         (ПРОСТО)
+// 25) Для умножения матриц и алгоритма Флойда добавить норму разности                   (ПРОСТО)
+// 26) Отменить контроль версий для лог-файлов                                           (ПРОСТО)
+// 27) Сделать функцию тестирующую всё                                                   (ПРОСТО)
 
 int main()
 {
     setlocale(LC_ALL, "");
 
- //   const TaskClass& floyd_params   = *read_floyd_algorythm_parameters();
-    const TaskClass& qr_params      = *read_qr_parameters();
- //   const TaskClass* mult_params    = read_multiplication_parameters();
- //   const TaskClass& realloc_params = *read_reallocation_test_parameters();
+    InitDispatchSystem();
 
- //   floyd_test(floyd_params, true);
+    const TaskClass& floyd_params   = *read_floyd_algorythm_parameters();
+    const TaskClass& qr_params      = *read_qr_parameters();
+    const TaskClass* mult_params    = read_multiplication_parameters();
+    const TaskClass& realloc_params = *read_reallocation_test_parameters();
+
+    floyd_test(floyd_params, true);
     qralg_test(qr_params, true);
- //   matrix_multiplication_tests(mult_params[0], mult_params[1], true);
- //   reallocation_test(realloc_params, true);
+    matrix_multiplication_tests(mult_params[0], mult_params[1], true);
+    reallocation_test(realloc_params, true);
 }
