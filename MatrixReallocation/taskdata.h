@@ -41,17 +41,12 @@ public:
         const int& double_block_rows_count = 0,
         const int& double_block_cols_count = 0);
 
-    void makeData(const int& rows_count, const int& cols_count,
-        const int& block_rows_count, const int& block_cols_count,
-        const int& double_block_rows_count = 0,
-        const int& double_block_cols_count = 0);
-
     const TaskData& getDataRef() const;
 
     // Принимает на вход адрес элемента в массиве со строчным размещением,
     // возвращает адрес этого элемента в массиве с двойным блочным размещением,
     // задаваемым набором параматров 'data'
-    inline int indexFunctionDbl(const int i_index,
+    inline int _fastcall indexFunctionDbl(const int i_index,
                                 const int j_index) const
     {
         // Координаты текущего большого блока
@@ -160,6 +155,9 @@ public:
 
         if (i_col < m_data.MAIN_COLS)
         {
+            // смещение в блочной полосе +
+            // смещение в блоке этой полосы +
+            // смещение в строке этого блока
             return m_data.BLOCK_SIZE * (i_col / m_data.B_COLS) +
                 m_data.B_COLS * (index / m_data.M_COLS) +
                 i_col % m_data.B_COLS;

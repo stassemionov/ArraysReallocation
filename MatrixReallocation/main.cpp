@@ -39,6 +39,8 @@
 // 25) Для умножения матриц и алгоритма Флойда добавить норму разности                   (ПРОСТО)
 // 26) Отменить контроль версий для лог-файлов                                           (ПРОСТО)
 // 27) Сделать функцию тестирующую всё                                                   (ПРОСТО)
+// 28) Оптимизировать все функции из service.h                                           (ПРОСТО)
+// 28) Сравнивать блочные с блочными, двойные блочные с двойными блочными                (ПРОСТО)
 
 int main()
 {
@@ -46,13 +48,13 @@ int main()
 
     InitDispatchSystem();
 
-    const TaskClass& floyd_params   = *read_floyd_algorythm_parameters();
-    const TaskClass& qr_params      = *read_qr_parameters();
-    const TaskClass* mult_params    = read_multiplication_parameters();
-    const TaskClass& realloc_params = *read_reallocation_test_parameters();
+//    const TaskClass& floyd_params   = read_floyd_algorythm_parameters();
+//    const TaskClass& qr_params      = read_qr_parameters();
+//    const pair<TaskClass, TaskClass> mult_params = read_multiplication_parameters();
+    const TaskClass& realloc_params = read_reallocation_test_parameters();
 
-    floyd_test(floyd_params, true);
-    qralg_test(qr_params, true);
-    matrix_multiplication_tests(mult_params[0], mult_params[1], true);
+//    floyd_test(floyd_params, true);
+//    qralg_test(qr_params, true);
+//    matrix_multiplication_tests(mult_params.first, mult_params.second, true);
     reallocation_test(realloc_params, true);
 }

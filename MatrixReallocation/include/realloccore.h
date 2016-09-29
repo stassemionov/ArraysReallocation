@@ -16,16 +16,19 @@ void standard_to_block_layout_reallocation(
     double* data_ptr,
     const BlockReallocationInfo& realloc_info);
 
-// Reallocating of standard-layout matrix to
-// block representation with b1 x b2 blocks using a buffer array.
-double* standard_to_block_layout_reallocation_buf(const double* data_ptr,
-    const TaskClass& data);
+// Maps standard-layout source matrix to
+// destination matrix with [b1 x b2] block layout.
+double* map_with_block_layout(
+    double* dst_ptr,
+    const double* src_ptr,
+    const TaskClass& task_info);
 
-// Reallocating of standard-layout matrix to
-// double block representation with b1 x b2 main blocks
-// and d1 x d2 subblocks, using a buffer array.
-double* standard_to_double_block_layout_reallocation_buf(
-    const double* data_ptr, const TaskClass& data);
+// Maps standard-layout source matrix to
+// destination matrix with [b1 x b2, d1 x d2] double block layout.
+double* map_with_double_block_layout(
+    double* dst_ptr,
+    const double* src_ptr,
+    const TaskClass& task_info);
 
 // Inplace reallocating of standard-layout matrix to
 // double block representation with b1 x b2 main blocks

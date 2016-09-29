@@ -30,65 +30,72 @@ void matrix_multiplication_double_block(double* gen_matrix,
     const int ND2 = static_cast<int>(ceil(1.0 * B2 / D2));
     const int ND3 = static_cast<int>(ceil(1.0 * B3 / D3));
 
-    TaskClass gen_mat_data;
-    gen_mat_data.makeData(N1, N3, B1, B3, D1, D3);
+    TaskClass gen_mat_data = TaskClass(N1, N3, B1, B3, D1, D3);
 
-    double sum;
     // big block level
     for (int ib = 0; ib < NB1; ++ib)
     {
         const int i_shift_gen = ib*B1*N3;
         const int i_shift_left = ib*B1*N2;
+        const int iblock_size = min(B1, N1 - ib*B1);
+        const int id_ub = min(ND1, static_cast<int>(ceil(1.0 * iblock_size / D1)));
 
-        const int rb1 = min(B1, N1 - ib*B1);
         for (int jb = 0; jb < NB3; ++jb)
         {
-            const int rb3 = min(B3, N3 - jb*B3);
-            
-            double* gen_block_begin = gen_matrix + i_shift_gen + jb*rb1*B3; // begin of big block
+            const int jblock_size = min(B3, N3 - jb*B3);
+            const int jd_ub = min(ND3, static_cast<int>(ceil(1.0 * jblock_size / D3)));
+            double* gen_block = gen_matrix + i_shift_gen + jb*iblock_size*B3;
+
             for (int kb = 0; kb < NB2; ++kb)
             {
-                const int rb2 = min(B2, N2 - kb*B2);
-                
-                const double* left_block_begin = left_matrix + i_shift_left + kb*rb1*B2;
-                const double* right_block_begin = right_matrix + kb*B2*N3 + jb*rb2*B3;
+                const int kblock_size = min(B2, N2 - kb*B2);
+                const int kd_ub = min(ND2, static_cast<int>(ceil(1.0 * kblock_size / D2)));
+                const double* left_block = left_matrix + i_shift_left + kb*iblock_size*B2;
+                const double* right_block = right_matrix + kb*B2*N3 + jb*kblock_size*B3;
 
-                const int rnd1 = min(ND1, static_cast<int>(ceil(1.0 * rb1 / D1)));
-                const int rnd2 = min(ND2, static_cast<int>(ceil(1.0 * rb2 / D2)));
-                const int rnd3 = min(ND3, static_cast<int>(ceil(1.0 * rb3 / D3)));
                 // small block level
-                for (int id = 0; id < rnd1; ++id)
+                for (int id = 0; id < id_ub; ++id)
                 {
-                    const int id_shift_gen = id*D1*rb3;
-                    const int id_shift_left = id*D1*rb2;
+                    const int i_loc_shift = id * D1;
+                    const int id_shift_gen = i_loc_shift * jblock_size;
+                    const int id_shift_left = i_loc_shift * kblock_size;
+                    const int i_ub = min(D1, iblock_size - i_loc_shift);
 
-                    const int rd1 = min(D1, rb1 - id*D1);
-                    for (int jd = 0; jd < rnd3; ++jd)
+                    for (int jd = 0; jd < jd_ub; ++jd)
                     {
-                        const int rd3 = min(D3, rb3 - jd*D3);
+                        const int j_loc_shift = jd * D3;
+                        const int j_ub = min(D3, jblock_size - j_loc_shift);
+                        const int gen_diff_val = i_ub * j_ub;
+                        double* gen_drow = gen_block +
+                            id_shift_gen + j_loc_shift * i_ub;
 
-                        double* gen_double_block_begin = gen_block_begin + id_shift_gen + jd*rd1*D3;
-                        for (int kd = 0; kd < rnd2; ++kd)
+                        for (int kd = 0; kd < kd_ub; ++kd)
                         {
-                            const int rd2 = min(D2, rb2 - kd*D2);
-                            
-                            const double* left_double_block_begin  = left_block_begin + id_shift_left + kd*rd1*D2;
-                            const double* right_double_block_begin = right_block_begin + kd*D2*rb3 + jd*rd2*D3;
+                            const int k_loc_shift = kd * D2;
+                            const int k_ub = min(D2, kblock_size - k_loc_shift);
+                            const double* left_drow  = left_block +
+                                id_shift_left + k_loc_shift * i_ub;
+                            const double* right_dblock = right_block +
+                                k_loc_shift * jblock_size + j_loc_shift * k_ub;
+
                             // element level
-                            for (int i = 0; i < rd1; ++i)
+                            for (int i = 0; i < i_ub; ++i)
                             {
-                                const double* left_line = left_double_block_begin + i*rd2;
-                                double* gen_line = gen_double_block_begin + i*rd3;
-                                for (int j = 0; j < rd3; ++j)
+                                for (int j = 0; j < j_ub; ++j)
                                 {
-                                    sum = gen_line[j];
-                                    for (int k = 0; k < rd2; ++k)
+                                    double sum(0.0);
+                                    for (int k = 0; k < k_ub; ++k)
                                     {
-                                        sum += left_line[k] * right_double_block_begin[k*rd3 + j];
+                                        sum += left_drow[k] * right_dblock[k*j_ub + j];
                                     }
-                                    gen_line[j] = sum;
+                                    gen_drow[j] += sum;
                                 }
+
+                                gen_drow += j_ub;
+                                left_drow += k_ub;
                             }
+
+                            gen_drow -= gen_diff_val;
                         }
                     }
                 }
@@ -115,40 +122,37 @@ void matrix_multiplication_block(double* gen_matrix,
     const int B2 = left_mat_data.getDataRef().B_COLS;
     const int B3 = right_mat_data.getDataRef().B_COLS;
 
-    TaskClass gen_mat_data;
-    gen_mat_data.makeData(N1, N3, B1, B3);
-
-    double sum;
     // block level
     for (int ib = 0; ib < NB1; ++ib)
     {
         const int i_shift_gen = ib*B1*N3;
         const int i_shift_left = ib*B1*N2;
+        const int i_ub = min(B1, N1 - ib*B1);
 
-        const int rb1 = min(B1, N1 - ib*B1);
         for (int jb = 0; jb < NB3; ++jb)
         {
-            const int rb3 = min(B3, N3 - jb*B3);
-            double* gen_block_begin = gen_matrix + i_shift_gen + jb*rb1*B3;
+            double* gen_block_begin = gen_matrix + i_shift_gen + jb*i_ub*B3;
+            const int j_ub = min(B3, N3 - jb*B3);
+
             for (int kb = 0; kb < NB2; ++kb)
             {
-                const int rb2 = min(B2, N2 - kb*B2);
+                const int k_ub = min(B2, N2 - kb*B2);
+                const double* left_block_begin = left_matrix + i_shift_left + kb*i_ub*B2;
+                const double* right_block_begin = right_matrix + kb*B2*N3 + jb*k_ub*B3;
+
                 // element level
-                const double* left_block_begin = left_matrix + i_shift_left + kb*rb1*B2;
-                const double* right_block_begin = right_matrix + kb*B2*N3 + jb*rb2*B3;
-                
-                for (int i = 0; i < rb1; ++i)
+                for (int i = 0; i < i_ub; ++i)
                 {
-                    const double* left_line = left_block_begin + i*rb2;
-                    double* gen_line = gen_block_begin + i*rb3;
-                    for (int j = 0; j < rb3; ++j)
+                    const double* left_row = left_block_begin + i * k_ub;
+                    double* gen_row = gen_block_begin + i * j_ub;
+                    for (int j = 0; j < j_ub; ++j)
                     {
-                        sum = gen_line[j];
-                        for (int k = 0; k < rb2; ++k)
+                        double sum(0.0);
+                        for (int k = 0; k < k_ub; ++k)
                         {
-                            sum += left_line[k] * right_block_begin[k*rb3 + j];
+                            sum += left_row[k] * right_block_begin[k*j_ub + j];
                         }
-                        gen_line[j] = sum;
+                        gen_row[j] += sum;
                     }
                 }
             }
@@ -182,7 +186,6 @@ void matrix_multiplication_double_tiled(double*          gen_matrix,
     const int ND2 = static_cast<int>(ceil(1.0 * B2 / D2));
     const int ND3 = static_cast<int>(ceil(1.0 * B3 / D3));
 
-    double sum;
     // big blocks level
     for (int ib = 0; ib < NB1; ++ib)
     {
@@ -216,12 +219,12 @@ void matrix_multiplication_double_tiled(double*          gen_matrix,
                                 double* gen_line = gen_matrix + i * N3;
                                 for (int j = lb3; j < ub3; ++j)
                                 {
-                                    sum = gen_line[j];
+                                    double sum(0.0);
                                     for (int k = lb2; k < ub2; ++k)
                                     {
                                         sum += left_line[k] * right_matrix[k * N3 + j];
                                     }
-                                    gen_line[j] = sum;
+                                    gen_line[j] += sum;
                                 }
                             }
                         }
@@ -251,27 +254,32 @@ void matrix_multiplication_tiled(double*          gen_matrix,
     const int& B2 = left_mat_data.getDataRef().B_COLS;
     const int& B3 = right_mat_data.getDataRef().B_COLS;
 
-    double sum;
     // block level
     for (int ib = 0; ib < NB1; ++ib)
     {
+        const int i_lb = ib * B1;
+        const int i_ub = min((ib + 1) * B1, N1);
         for (int jb = 0; jb < NB3; ++jb)
         {
+            const int j_lb = jb * B3;
+            const int j_ub = min((jb + 1) * B3, N3);
             for (int kb = 0; kb < NB2; ++kb)
             {
+                const int k_lb = kb * B2;
+                const int k_ub = min((kb + 1) * B2, N2);
                 // element level
-                for (int i = ib*B1; i < min((ib+1)*B1,N1); ++i)
+                for (int i = i_lb; i < i_ub; ++i)
                 {
                     const double* left_line = left_matrix + i * N2;
                     double* gen_line = gen_matrix + i * N3;
-                    for (int j = jb*B3; j < min((jb + 1)*B3, N3); ++j)
+                    for (int j = j_lb; j < j_ub; ++j)
                     {
-                        sum = gen_line[j];
-                        for (int k = kb*B2; k <  min((kb + 1)*B2, N2); ++k)
+                        double sum(0.0);
+                        for (int k = k_lb; k < k_ub; ++k)
                         {
                             sum += left_line[k] * right_matrix[k * N3 + j];
                         }
-                        gen_line[j] = sum;
+                        gen_line[j] += sum;
                     }
                 }
             }
@@ -285,14 +293,13 @@ void matrix_multiplication_standard(double* gen_matrix,
     const double* src_right_matrix,
     const int N1, const int N2, const int N3)
 {
-    double sum;
     for (int i = 0; i < N1; ++i)
     {
         const double* left_line = src_left_matrix + i * N2;
         double* gen_line = gen_matrix + i * N3;
         for (int j = 0; j < N3; ++j)
         {
-            sum = 0;
+            double sum(0.0);
             for (int k = 0; k < N2; ++k)
             {
                 sum += left_line[k] * src_right_matrix[k * N3 + j];

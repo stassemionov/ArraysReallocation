@@ -115,66 +115,67 @@ void TurnOffDispatchSystem()
 // *** LAYOUT DISPATCHER CLASS ***
 
 
-double* standard_to_block_layout_reallocation_buf(const double* data_ptr,
+double* map_with_block_layout(
+    double* dst_ptr,
+    const double* src_ptr,
     const TaskClass& task_info)
 {
     const TaskData& data = task_info.getDataRef();
-    
-    double* result = new double[data.M_ROWS * data.M_COLS];
-    for (int i = 0; i < data.M_ROWS * data.M_COLS; ++i)
+    const int size = data.M_ROWS * data.M_COLS;
+    for (int i = 0; i < size; ++i)
     {
-        result[task_info.indexFunction(i)] = data_ptr[i];
+        dst_ptr[task_info.indexFunction(i)] = src_ptr[i];
     }
-    return result;
+    return dst_ptr;
 }
 
-double* standard_to_double_block_layout_reallocation_buf(
-    const double* data_ptr, const TaskClass& task_info)
+double* map_with_double_block_layout(
+    double* dst_ptr,
+    const double* src_ptr,
+    const TaskClass& task_info)
 {
     const TaskData& data = task_info.getDataRef();
-
-    double* result = new double[data.M_ROWS * data.M_COLS];
     for (int i = 0; i < data.M_ROWS; ++i)
     {
-        const double* row_ptr = data_ptr + i * data.M_COLS;
+        const double* src_row = src_ptr + i * data.M_COLS;
         for (int j = 0; j < data.M_COLS; ++j)
         {
-            result[task_info.indexFunctionDbl(i,j)] = row_ptr[j];
+            dst_ptr[task_info.indexFunctionDbl(i,j)] = src_row[j];
         }
     }
-    return result;
+    return dst_ptr;
 }
 
 // Проверка, является ли цикл, содержащий индекс 'index',
 // новым по отношению к циклам, порожденным множеством индексов 'help_vec'
-static inline bool is_new_cycle(const int index,
-                                const TaskClass& task_info,
-                                const vector<int>& help_vec)
+inline bool _fastcall is_new_cycle(const int start_index,
+                                   const TaskClass& task_data,
+                                   const vector<int>& help_vec)
 {
-    int next = index;
+    int next = start_index;
     do
     {
-        // Если цикл новый, то стартовый индекс имеет наименьшую величину
-        // среди индексов этого цикла, т.к. поиск новых циклов производится
-        // слева направо, т.е. по возрастанию индекса.
-        // Если же очереой индекс оказался меньше стартового, то
-        // данный цикл уже был пройден ранее по указанной причине. 
-        if (next < index)
+        // Если цикл новый, то все его индексы больше индекса,
+        // с которого начинали поиск, т.к. поиск производится
+        // слева направо. Поэтому, встречая индекс меньший
+        // стартового, можно точно утверждать, что он принадлежит
+        // уже пройденному циклу.
+        if (next < start_index)
         {
             return false;
         }
-        if (m_find(next, help_vec))
+        if (bin_search(next, help_vec))
         {
             return false;
         }
-        next = task_info.indexFunctionReduced(next);
+        next = task_data.indexFunctionReduced(next);
     }
-    while (next != index);
+    while (next != start_index);
 
     return true;
 }
 
-const vector<int> cycles_distribution_learning(const TaskClass& task_info)
+const vector<int> cycles_distribution_computation(const TaskClass& task_info)
 {
     const TaskData& data = task_info.getDataRef();
 
@@ -192,7 +193,7 @@ const vector<int> cycles_distribution_learning(const TaskClass& task_info)
         (data.B_ROWS * data.M_COLS - 2 * data.B_COLS) :
         (data.B_ROWS * data.M_COLS - data.B_COLS - data.DIF_COLS);
 
-    int gcd_val = gcd(data.B_COLS, data.DIF_COLS);
+    const int gcd_val = gcd(data.B_COLS, data.DIF_COLS);
     // Iteration step.
     // In case of multiplicity, every cycle width equals 'b2'.
     // It means, we can transfer 'b2' elements with one step)
@@ -301,7 +302,7 @@ const vector<int> cycles_distribution_learning(const TaskClass& task_info)
             previous_max = max_index;
             previous_len = length;
 
-            if (!m_find(min_index, help_vec))
+            if (!bin_search(min_index, help_vec))
             {
                 help_vec.push_back(min_index);
                 sort(help_vec.begin(), help_vec.end());
@@ -345,17 +346,17 @@ static const BlockReallocationInfo* computeCyclesDistribution(
     vector<int> sdr_vec_addit;
 
     // Searching for cycles
-    sdr_vec_main = cycles_distribution_learning(main_task_info);
+    sdr_vec_main = cycles_distribution_computation(main_task_info);
     // Searching for cycles of additional case (N1 % B1 != 0)
     const TaskData& task_data = main_task_info.getDataRef();
     if (task_data.DIF_ROWS != 0)
     {
-        subtask_info.makeData(task_data.M_ROWS, task_data.M_COLS,
+        subtask_info = TaskClass(task_data.M_ROWS, task_data.M_COLS,
             task_data.DIF_ROWS, task_data.B_COLS);
-        sdr_vec_addit = cycles_distribution_learning(subtask_info);
+        sdr_vec_addit = cycles_distribution_computation(subtask_info);
     }
 
-    // Constructing of new reallocation data struct
+    // Constructing new reallocation data struct
     const BlockReallocationInfo* new_realloc_info =
         LayoutDataDispatcher::createNewRecord(
             sdr_vec_main,
@@ -487,14 +488,14 @@ const BlockReallocationInfo* standard_to_block_layout_reallocation(
     vector<int> sdr_vec_main, sdr_vec_last_stripe;
 
     // Learning
-    sdr_vec_main = cycles_distribution_learning(task_info);
+    sdr_vec_main = cycles_distribution_computation(task_info);
 
     TaskClass subtask_info;
     if (data.DIF_ROWS != 0)
     {
-        subtask_info.makeData(data.M_ROWS, data.M_COLS, 
+        subtask_info = TaskClass(data.M_ROWS, data.M_COLS, 
                               data.DIF_ROWS, data.B_COLS);
-        sdr_vec_last_stripe = cycles_distribution_learning(subtask_info);
+        sdr_vec_last_stripe = cycles_distribution_computation(subtask_info);
     }
     // Reallocation
     double* stripe_data_ptr = data_ptr;
@@ -582,17 +583,17 @@ const DoubleBlockReallocationInfo* standard_to_double_block_layout_reallocation(
     // cutting truncated part off from big block.
 
     // Learning for main group of big blocks (consists of complete blocks)
-    main_data.makeData(data.B_ROWS, data.B_COLS, data.D_ROWS, data.D_COLS);
-    sdr_main = cycles_distribution_learning(main_data);
+    main_data = TaskClass(data.B_ROWS, data.B_COLS, data.D_ROWS, data.D_COLS);
+    sdr_main = cycles_distribution_computation(main_data);
     const int loc_rows_shift = data.B_ROWS % data.D_ROWS;
     // If there is no multiplicity of big and small blocks sizes
     if (loc_rows_shift != 0)
     {
         const int dif_rows_loc = (loc_rows_shift >= data.D_ROWS) ? 
                                   data.D_ROWS : loc_rows_shift;
-        main_data_addit.makeData(dif_rows_loc, data.B_COLS,
+        main_data_addit = TaskClass(dif_rows_loc, data.B_COLS,
                                  dif_rows_loc, data.D_COLS);
-        sdr_main_addit = cycles_distribution_learning(main_data_addit);
+        sdr_main_addit = cycles_distribution_computation(main_data_addit);
     }
 
     // Learning for bottom group of big blocks
@@ -601,9 +602,9 @@ const DoubleBlockReallocationInfo* standard_to_double_block_layout_reallocation(
     {
         const int loc_block_height = (data.DIF_ROWS >= data.D_ROWS) ?
                                       data.D_ROWS : data.DIF_ROWS;
-        bottom_data.makeData(data.DIF_ROWS, data.B_COLS,
+        bottom_data = TaskClass(data.DIF_ROWS, data.B_COLS,
                              loc_block_height, data.D_COLS);
-        sdr_bottom = cycles_distribution_learning(bottom_data);
+        sdr_bottom = cycles_distribution_computation(bottom_data);
 
         const int dif_rows_loc = data.DIF_ROWS % loc_block_height;
         // If there is no multiplicity of bottom big and small block size
@@ -611,9 +612,9 @@ const DoubleBlockReallocationInfo* standard_to_double_block_layout_reallocation(
         {
             const int db1_bottom = (dif_rows_loc >= data.D_ROWS) ?
                                     data.D_ROWS : dif_rows_loc;
-            bottom_data_addit.makeData(dif_rows_loc, data.B_COLS,
+            bottom_data_addit = TaskClass(dif_rows_loc, data.B_COLS,
                                        db1_bottom, data.D_COLS);
-            sdr_bottom_addit = cycles_distribution_learning(bottom_data_addit);
+            sdr_bottom_addit = cycles_distribution_computation(bottom_data_addit);
         }
     }
     
@@ -623,18 +624,18 @@ const DoubleBlockReallocationInfo* standard_to_double_block_layout_reallocation(
     {
         const int loc_block_width = (data.DIF_COLS >= data.D_COLS) ?
                                      data.D_COLS : data.DIF_COLS;
-        right_data.makeData(data.B_ROWS, data.DIF_COLS,
+        right_data = TaskClass(data.B_ROWS, data.DIF_COLS,
                             data.D_ROWS, loc_block_width);
-        sdr_right = cycles_distribution_learning(right_data);
+        sdr_right = cycles_distribution_computation(right_data);
         const int dif_rows_loc = loc_rows_shift;
         // If there is no multiplicity of right big and small block size
         if (dif_rows_loc != 0)
         {
             const int db1_bottom = (dif_rows_loc >= data.D_ROWS) ?
                                     data.D_ROWS : dif_rows_loc;
-            right_data_addit.makeData(dif_rows_loc, data.DIF_COLS,
+            right_data_addit = TaskClass(dif_rows_loc, data.DIF_COLS,
                                       db1_bottom, loc_block_width);
-            sdr_right_addit = cycles_distribution_learning(right_data_addit);
+            sdr_right_addit = cycles_distribution_computation(right_data_addit);
         }
     }
 
@@ -646,18 +647,18 @@ const DoubleBlockReallocationInfo* standard_to_double_block_layout_reallocation(
                                       data.D_ROWS : data.DIF_ROWS;
         const int loc_block_width  = (data.DIF_COLS >= data.D_COLS) ?
                                       data.D_COLS : data.DIF_COLS;
-        corner_data.makeData(data.DIF_ROWS, data.DIF_COLS,
+        corner_data = TaskClass(data.DIF_ROWS, data.DIF_COLS,
                              loc_block_height, loc_block_width);
-        sdr_corner = cycles_distribution_learning(corner_data);
+        sdr_corner = cycles_distribution_computation(corner_data);
         const int dif_rows_loc = data.DIF_ROWS % loc_block_height;
         // If there is no multiplicity of corner big and small block size
         if (dif_rows_loc != 0)
         {
             const int db1_bottom = (dif_rows_loc >= data.D_ROWS) ? 
                                     data.D_ROWS : dif_rows_loc;
-            corner_data_addit.makeData(dif_rows_loc, data.DIF_COLS,
+            corner_data_addit = TaskClass(dif_rows_loc, data.DIF_COLS,
                                        db1_bottom, loc_block_width);
-            sdr_corner_addit = cycles_distribution_learning(corner_data_addit);
+            sdr_corner_addit = cycles_distribution_computation(corner_data_addit);
         }
     }
     // ... end of learning.

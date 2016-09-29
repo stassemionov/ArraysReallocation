@@ -86,8 +86,7 @@ Blocks select_optimal_double_block_size_multiplication(const int N,
             memcpy(right_copy, right_matrix, N*N*sizeof(double));
             memset(generator,  0,            N*N*sizeof(double));
 
-            TaskClass task_data;
-            task_data.makeData(N, N,
+            TaskClass task_data = TaskClass(N, N,
                                block_size, block_size,
                                double_block_size, double_block_size);
 
@@ -197,8 +196,7 @@ int select_optimal_block_size_multiplication(
         memcpy(left_copy, left_matrix, N*N*sizeof(double));
         memcpy(right_copy, right_matrix, N*N*sizeof(double));
         
-        TaskClass task_data;
-        task_data.makeData(N, N, block_size, block_size);
+        TaskClass task_data = TaskClass(N, N, block_size, block_size);
 
         time_ = clock();
         standard_to_block_layout_reallocation(left_copy,
@@ -262,28 +260,25 @@ void matrix_multiplication_tests(const TaskClass& params_left,
 
     fprintf(log_file, "\n [> Запуск тестов для параметров:\n");
     fprintf(log_file, "    N1 = %5d, N2 = %5d, N3 = %5d\n", N1, N2, N3);
-    fprintf(log_file, "    B1 = %5d, B2 = %5d, B3 = %5d\n",
-        params_left.getDataRef().B_ROWS, params_left.getDataRef().B_COLS, params_right.getDataRef().B_COLS);
-    fprintf(log_file, "    D1 = %5d, D2 = %5d, D3 = %5d\n",
-        params_left.getDataRef().D_ROWS, params_left.getDataRef().D_COLS, params_right.getDataRef().D_COLS);
+    fprintf(log_file, "    B1 = %5d, B2 = %5d, B3 = %5d\n", B1, B2, B3);
+    fprintf(log_file, "    D1 = %5d, D2 = %5d, D3 = %5d\n", D1, D2, D3);
 
     if (console_info_output)
     {
         printf("\n\n [> Запуск тестов для параметров:\n");
         printf("    N1 = %5d, N2 = %5d, N3 = %5d\n", N1, N2, N3);
-        printf("    B1 = %5d, B2 = %5d, B3 = %5d\n",
-           params_left.getDataRef().B_ROWS, params_left.getDataRef().B_COLS, params_right.getDataRef().B_COLS);
-        printf("    D1 = %5d, D2 = %5d, D3 = %5d\n",
-            params_left.getDataRef().D_ROWS, params_left.getDataRef().D_COLS, params_right.getDataRef().D_COLS);
+        printf("    B1 = %5d, B2 = %5d, B3 = %5d\n", B1, B2, B3);
+        printf("    D1 = %5d, D2 = %5d, D3 = %5d\n", D1, D2, D3);
     }
 
-    double* left_mat = new double[N1*N2];
-    double* rgt_mat = new double[N2*N3];
-    double* gen_mat = new double[N1*N3];
+    double* left_mat   = new double[N1*N2];
+    double* rgt_mat    = new double[N2*N3];
+    double* gen_mat_t  = new double[N1*N3];
+    double* gen_mat_dt = new double[N1*N3];
+    double* gen_mat_b  = new double[N1*N3];
+    double* gen_mat_db = new double[N1*N3];
 
-//    BlockReallocationInfo gen_realloc_info;
-
-    const double memory_val = (8.0 * (N1*N2 + N2*N3 + N1*N3)) / (1024 * 1024);
+    const double memory_val = (8.0 * (N1*N2 + N2*N3 + 4*N1*N3)) / (1024 * 1024);
     fprintf(log_file, "  > Объем выделенной памяти:   [ %.2lf Мб ]\n", memory_val);
     fprintf(log_file, "    ---------------------------------------------------------------\n");
     if (console_info_output)
@@ -313,7 +308,8 @@ void matrix_multiplication_tests(const TaskClass& params_left,
         printf("  > Умножение матриц (тайлинг)...                  ");
     }
     time_ = clock();
-    matrix_multiplication_tiled(gen_mat, left_mat, rgt_mat,
+    matrix_multiplication_tiled(
+        gen_mat_t, left_mat, rgt_mat,
         params_left, params_right);
     time_ = (clock() - time_) / (1.0 * CLOCKS_PER_SEC);
     fprintf(log_file, "[ %.3lf секунд ]\n", time_);
@@ -322,16 +318,15 @@ void matrix_multiplication_tests(const TaskClass& params_left,
         printf("[ %.3lf секунд ]\n", time_);
     }
 
-    memset(gen_mat, 0, N1*N3*sizeof(double));
-
     fprintf(log_file, "  > Умножение матриц (двойной тайлинг)...          ");
     if (console_info_output)
     {
         printf("  > Умножение матриц (двойной тайлинг)...          ");
     }
     time_ = clock();
-    matrix_multiplication_double_tiled(gen_mat, left_mat, rgt_mat,
-                                       params_left, params_right);
+    matrix_multiplication_double_tiled(
+        gen_mat_dt, left_mat, rgt_mat,
+        params_left, params_right);
     time_ = (clock() - time_) / (1.0 * CLOCKS_PER_SEC);
     fprintf(log_file, "[ %.3lf секунд ]\n", time_);
     if (console_info_output)
@@ -339,8 +334,6 @@ void matrix_multiplication_tests(const TaskClass& params_left,
         printf("[ %.3lf секунд ]\n", time_);
     }
 
-    memset(gen_mat, 0, N1*N3*sizeof(double));
-    
     fprintf(log_file, "  > Блочное переразмещение...\n");
     fprintf(log_file, "    Левая матрица...                               ");
     if (console_info_output)
@@ -363,7 +356,7 @@ void matrix_multiplication_tests(const TaskClass& params_left,
         printf("    Правая матрица...                              ");
     }
     time_ = clock();
-    standard_to_block_layout_reallocation(rgt_mat, N1, N2, B1, B2);
+    standard_to_block_layout_reallocation(rgt_mat, N2, N3, B2, B3);
     time_ = (clock() - time_) / (1.0 * CLOCKS_PER_SEC);
     fprintf(log_file, "[ %.3lf секунд ]\n", time_);
     if (console_info_output)
@@ -371,22 +364,21 @@ void matrix_multiplication_tests(const TaskClass& params_left,
         printf("[ %.3lf секунд ]\n", time_);
     }
 
-    fprintf(log_file, "  > Блочное умножение матриц (тайлинг)...          ");
+    fprintf(log_file, "  > Блочное умножение матриц...                    ");
     if (console_info_output)
     {
-        printf("  > Блочное умножение матриц (тайлинг)...          ");
+        printf("  > Блочное умножение матриц...                    ");
     }
     time_ = clock();
-    matrix_multiplication_block(gen_mat, left_mat, rgt_mat,
-                                      params_left, params_right);
+    matrix_multiplication_block(
+        gen_mat_b, left_mat, rgt_mat,
+        params_left, params_right);
     time_ = (clock() - time_) / (1.0 * CLOCKS_PER_SEC);
     fprintf(log_file, "[ %.3lf секунд ]\n", time_);
     if (console_info_output)
     {
         printf("[ %.3lf секунд ]\n", time_);
     }
-
-    memset(gen_mat, 0, N1*N3*sizeof(double));
 
     fprintf(log_file, "  > Обратное переразмещение...                     ");
     if (console_info_output)
@@ -394,16 +386,18 @@ void matrix_multiplication_tests(const TaskClass& params_left,
         printf("  > Обратное переразмещение...                     ");
     }
     time_ = clock();
-//    block_to_standard_layout_reallocation(gen_mat, );
+    block_to_standard_layout_reallocation(gen_mat_b, N1, N3, B1, B3);
     block_to_standard_layout_reallocation(left_mat, N1, N2, B1, B2);
-    block_to_standard_layout_reallocation(rgt_mat, N1, N2, B1, B2);
+    block_to_standard_layout_reallocation(rgt_mat, N2, N3, B2, B3);
     time_ = (clock() - time_) / (1.0 * CLOCKS_PER_SEC);
     fprintf(log_file, "[ %.3lf секунд ]\n", time_);
     if (console_info_output)
     {
         printf("[ %.3lf секунд ]\n", time_);
     }
+    TurnOffDispatchSystem();
 
+    InitDispatchSystem();
     fprintf(log_file, "  > Двойное блочное переразмещение...\n");
     fprintf(log_file, "    Левая матрица...                               ");
     if (console_info_output)
@@ -428,7 +422,7 @@ void matrix_multiplication_tests(const TaskClass& params_left,
     }
     time_ = clock();
     standard_to_double_block_layout_reallocation(rgt_mat,
-        N1, N2, B1, B2, D1, D2);
+        N2, N3, B2, B3, D2, D3);
     time_ = (clock() - time_) / (1.0 * CLOCKS_PER_SEC);
     fprintf(log_file, "[ %.3lf секунд ]\n", time_);
     if (console_info_output)
@@ -436,14 +430,15 @@ void matrix_multiplication_tests(const TaskClass& params_left,
         printf("[ %.3lf секунд ]\n", time_);
     }
 
-    fprintf(log_file, "  > Блочное умножение матриц (двойной тайлинг)...  ");
+    fprintf(log_file, "  > Блочное умножение матриц (двойные блоки)...    ");
     if (console_info_output)
     {
-        printf("  > Блочное умножение матриц (двойной тайлинг)...  ");
+        printf("  > Блочное умножение матриц (двойные блоки)...    ");
     }
     time_ = clock();
-    matrix_multiplication_double_block(gen_mat, left_mat, rgt_mat,
-                                             params_left, params_right);
+    matrix_multiplication_double_block(
+        gen_mat_db, left_mat, rgt_mat,
+        params_left, params_right);
     time_ = (clock() - time_) / (1.0 * CLOCKS_PER_SEC);
     fprintf(log_file, "[ %.3lf секунд ]\n", time_);
     if (console_info_output)
@@ -457,23 +452,52 @@ void matrix_multiplication_tests(const TaskClass& params_left,
         printf("  > Обратное переразмещение...                     ");
     }
     time_ = clock();
-    //    block_to_standard_layout_reallocation(gen_mat, );
+    double_block_to_standard_layout_reallocation(gen_mat_db,
+        N1, N3, B1, B3, D1, D3);
     double_block_to_standard_layout_reallocation(left_mat,
         N1, N2, B1, B2, D1, D2);
     double_block_to_standard_layout_reallocation(rgt_mat,
-        N1, N2, B1, B2, D1, D2);
+        N2, N3, B2, B3, D2, D3);
     time_ = (clock() - time_) / (1.0 * CLOCKS_PER_SEC);
     fprintf(log_file, "[ %.3lf секунд ]\n\n", time_);
     if (console_info_output)
     {
         printf("[ %.3lf секунд ]\n\n", time_);
     }
+
+    const double comparison_dbt  = compare_arrays(gen_mat_db, gen_mat_t,  N1*N3);
+    const double comparison_dbdt = compare_arrays(gen_mat_db, gen_mat_dt, N1*N3);
+    const double comparison_dbb  = compare_arrays(gen_mat_db, gen_mat_b,  N1*N3);
+    const double comparison_bt   = compare_arrays(gen_mat_b,  gen_mat_t,  N1*N3);
+    const double comparison_bdt  = compare_arrays(gen_mat_b,  gen_mat_dt, N1*N3);
+    const double comparison_dtt  = compare_arrays(gen_mat_dt, gen_mat_t,  N1*N3);
+
+    fprintf(log_file, "  > Попарное сравнение результатов:\n");
+    fprintf(log_file, "    DIFFERENCE DB - T  [ %.6lf ]\n", comparison_dbt);
+    fprintf(log_file, "    DIFFERENCE DB - DT [ %.6lf ]\n", comparison_dbdt);
+    fprintf(log_file, "    DIFFERENCE DB - B  [ %.6lf ]\n", comparison_dbb);
+    fprintf(log_file, "    DIFFERENCE B  - T  [ %.6lf ]\n", comparison_bt);
+    fprintf(log_file, "    DIFFERENCE B  - DT [ %.6lf ]\n", comparison_bdt);
+    fprintf(log_file, "    DIFFERENCE DT - T  [ %.6lf ]\n", comparison_dtt);
+    if (console_info_output)
+    {
+        printf("  > Попарное сравнение результатов:\n");
+        printf("    DIFFERENCE DB - T  [ %.6lf ]\n", comparison_dbt);
+        printf("    DIFFERENCE DB - DT [ %.6lf ]\n", comparison_dbdt);
+        printf("    DIFFERENCE DB - B  [ %.6lf ]\n", comparison_dbb);
+        printf("    DIFFERENCE B  - T  [ %.6lf ]\n", comparison_bt);
+        printf("    DIFFERENCE B  - DT [ %.6lf ]\n", comparison_bdt);
+        printf("    DIFFERENCE DT - T  [ %.6lf ]\n", comparison_dtt);
+    }
         
     fclose(log_file);
 
     delete[] left_mat;
     delete[] rgt_mat;
-    delete[] gen_mat;
+    delete[] gen_mat_t;
+    delete[] gen_mat_dt;
+    delete[] gen_mat_b;
+    delete[] gen_mat_db;
 
     TurnOffDispatchSystem();
 }
@@ -500,9 +524,9 @@ void floyd_test(const TaskClass& parameters,
         printf("    B = %5d\n", B);
     }
 
-    double* matrix = new double[N*N];
-    double* standard = new double[N*N];
-    double* matrix_copy = new double[N*N];
+    double* mat_st = new double[N*N];
+    double* mat_t  = new double[N*N];
+    double* mat_b  = new double[N*N];
     
     const double memory_val = (24.0 * N*N) / (1024 * 1024);
     fprintf(log_file, "  > Объем выделенной памяти:   [ %.2lf Мб ]\n", memory_val);
@@ -519,7 +543,7 @@ void floyd_test(const TaskClass& parameters,
         printf("  > Заполнение массива...                          ");
     }
     double time_ = clock();
-    generate(matrix, N, N);
+    generate(mat_st, N, N);
     time_ = (clock() - time_) / (1.0 * CLOCKS_PER_SEC);
     fprintf(log_file, "[ %.3lf секунд ]\n", time_);
     if (console_info_output)
@@ -527,8 +551,8 @@ void floyd_test(const TaskClass& parameters,
         printf("[ %.3lf секунд ]\n", time_);
     }
 
-    memcpy(matrix_copy, matrix, sizeof(double)*N*N);
-    memcpy(standard,    matrix, sizeof(double)*N*N);
+    memcpy(mat_t, mat_st, sizeof(double)*N*N);
+    memcpy(mat_b, mat_st, sizeof(double)*N*N);
 
     fprintf(log_file, "  > Стандартный алгоритм Флойда...                 ");
     if (console_info_output)
@@ -536,7 +560,7 @@ void floyd_test(const TaskClass& parameters,
         printf("  > Стандартный алгоритм Флойда...                 ");
     }
     time_ = clock();
-    floyd_standard(standard, N);
+    floyd_standard(mat_st, N);
     time_ = (clock() - time_) / (1.0 * CLOCKS_PER_SEC);
     fprintf(log_file, "[ %.3lf секунд ]\n", time_);
     if (console_info_output)
@@ -550,7 +574,7 @@ void floyd_test(const TaskClass& parameters,
         printf("  > Алгоритм Флойда (тайлинг)...                   ");
     }
     time_ = clock();
-    floyd_tiled(matrix, N, B);
+    floyd_tiled(mat_t, N, B);
     time_ = (clock() - time_) / (1.0 * CLOCKS_PER_SEC);
     fprintf(log_file, "[ %.3lf секунд ]\n", time_);
     if (console_info_output)
@@ -564,7 +588,7 @@ void floyd_test(const TaskClass& parameters,
         printf("  > Блочное переразмещение...                      ");
     }
     time_ = clock();
-    standard_to_block_layout_reallocation(matrix_copy, N, N, B, B);
+    standard_to_block_layout_reallocation(mat_b, N, N, B, B);
     time_ = (clock() - time_) / (1.0 * CLOCKS_PER_SEC);
     fprintf(log_file, "[ %.3lf секунд ]\n", time_);
     if (console_info_output)
@@ -578,7 +602,7 @@ void floyd_test(const TaskClass& parameters,
         printf("  > Блочный алгоритм Флойда...                     ");
     }
     time_ = clock();
-    block_floyd_tiled(matrix_copy, N, B);
+    floyd_block(mat_b, N, B);
     time_ = (clock() - time_) / (1.0 * CLOCKS_PER_SEC);
     fprintf(log_file, "[ %.3lf секунд ]\n", time_);
     if (console_info_output)
@@ -592,19 +616,35 @@ void floyd_test(const TaskClass& parameters,
         printf("  > Обратное переразмещение...                     ");
     }
     time_ = clock();
-    block_to_standard_layout_reallocation(matrix_copy, N, N, B, B);
+    block_to_standard_layout_reallocation(mat_b, N, N, B, B);
     time_ = (clock() - time_) / (1.0 * CLOCKS_PER_SEC);
-    fprintf(log_file, "[ %.3lf секунд ]\n\n", time_);
+    fprintf(log_file, "[ %.3lf секунд ]\n", time_);
     if (console_info_output)
     {
-        printf("[ %.3lf секунд ]\n\n", time_);
+        printf("[ %.3lf секунд ]\n", time_);
     }
     
+    const double comparison_bst = compare_arrays(mat_b, mat_st, N*N);
+    const double comparison_bt  = compare_arrays(mat_b, mat_t, N*N);
+    const double comparison_tst = compare_arrays(mat_t, mat_st, N*N);
+
+    fprintf(log_file, "  > Попарное сравнение результатов:\n");
+    fprintf(log_file, "    DIFFERENCE B - S  [ %.6lf ]\n", comparison_bst);
+    fprintf(log_file, "    DIFFERENCE B - T  [ %.6lf ]\n", comparison_bt);
+    fprintf(log_file, "    DIFFERENCE T - S  [ %.6lf ]\n\n", comparison_tst);
+    if (console_info_output)
+    {
+        printf("  > Попарное сравнение результатов:\n");
+        printf("    DIFFERENCE B - S  [ %.6lf ]\n", comparison_bst);
+        printf("    DIFFERENCE B - T  [ %.6lf ]\n", comparison_bt);
+        printf("    DIFFERENCE T - S  [ %.6lf ]\n\n", comparison_tst);
+    }
+
     fclose(log_file);
 
-    delete[] matrix;
-    delete[] standard;
-    delete[] matrix_copy;
+    delete[] mat_st;
+    delete[] mat_t;
+    delete[] mat_b;
 
     TurnOffDispatchSystem();
 }
@@ -638,8 +678,7 @@ int select_optimal_block_size_floyd(
 
         memcpy(matrix, original, N*N*sizeof(double));
 
-        TaskClass task_data;
-        task_data.makeData(N, N, block_size, block_size);
+        TaskClass task_data = TaskClass(N, N, block_size, block_size);
 
         time_ = clock();
         standard_to_block_layout_reallocation(matrix,
@@ -647,7 +686,7 @@ int select_optimal_block_size_floyd(
         realloc_time = (clock() - time_) / (1.0 * CLOCKS_PER_SEC);
 
         time_ = clock();
-        block_floyd_tiled(matrix, N, block_size);
+        floyd_block(matrix, N, block_size);
         alg_time = (clock() - time_) / (1.0 * CLOCKS_PER_SEC);
         res_time = alg_time + realloc_time;
 
@@ -679,7 +718,7 @@ int select_optimal_block_size_floyd(
 void reallocation_test(const TaskClass& parameters,
                        const bool console_info_output)
 {
-    TurnOffDispatchSystem();
+    InitDispatchSystem();
 
     const TaskData& data_ref = parameters.getDataRef();
     const int N1 = data_ref.M_ROWS;
@@ -696,7 +735,6 @@ void reallocation_test(const TaskClass& parameters,
     fprintf(log_file, "    N1 = %5d, N2 = %5d\n", N1, N2);
     fprintf(log_file, "    B1 = %5d, B2 = %5d\n", B1, B2);
     fprintf(log_file, "    D1 = %5d, D2 = %5d\n", D1, D2);
-
     if (console_info_output)
     {
         printf("\n [> Запуск тестов для параметров:\n");
@@ -706,8 +744,9 @@ void reallocation_test(const TaskClass& parameters,
     }
 
     double* mat1 = new double[N1*N2];
+    double* mat2 = new double[N1*N2];
 
-    const double memory_val = (8.0 * N1*N2) / (1024 * 1024);
+    const double memory_val = (16.0 * N1*N2) / (1024 * 1024);
     fprintf(log_file, "  > Объем выделенной памяти:   [ %.2lf Мб ]\n", memory_val);
     fprintf(log_file, "    ---------------------------------------------------------------\n");
     if (console_info_output)
@@ -730,7 +769,6 @@ void reallocation_test(const TaskClass& parameters,
         printf("[ %.3lf секунд ]\n", time_);
     }
 
-    double* mat2 = new double[N1*N2];
     memcpy(mat2, mat1, N1*N2*sizeof(double));
 
     fprintf(log_file, "  > Блочное переразмещение...                      ");
@@ -746,7 +784,9 @@ void reallocation_test(const TaskClass& parameters,
     {
         printf("[ %.3lf секунд ]\n", time_);
     }
+    TurnOffDispatchSystem();
 
+    InitDispatchSystem();
     fprintf(log_file, "  > Обратное переразмещение...                     ");
     if (console_info_output)
     {
@@ -760,7 +800,9 @@ void reallocation_test(const TaskClass& parameters,
     {
         printf("[ %.3lf секунд ]\n", time_);
     }
+    TurnOffDispatchSystem();
 
+    InitDispatchSystem();
     fprintf(log_file, "  > Двойное блочное переразмещение...              ");
     if (console_info_output)
     {
@@ -774,7 +816,9 @@ void reallocation_test(const TaskClass& parameters,
     {
         printf("[ %.3lf секунд ]\n", time_);
     }
+    TurnOffDispatchSystem();
 
+    InitDispatchSystem();
     fprintf(log_file, "  > Обратное переразмещение...                     ");
     if (console_info_output)
     {
@@ -788,28 +832,28 @@ void reallocation_test(const TaskClass& parameters,
     {
         printf("[ %.3lf секунд ]\n", time_);
     }
+    TurnOffDispatchSystem();
 
-    const double diff_norm = compare_arrays(mat1, mat2, N1 * N2);
+    const double diff_norm = compare_arrays(mat1, mat2, N1*N2);
     fprintf(log_file, 
-        "  > Норма разности:                                [ %.6lf     ]\n\n",
+        "  > Норма разности:                                [ %.6lf ]\n\n",
         diff_norm);
     if (console_info_output)
     {
-        printf("  > Норма разности:                                [ %.6lf     ]\n\n",
+        printf("  > Норма разности:                                [ %.6lf ]\n\n",
             diff_norm);
     }
 
     fclose(log_file);
 
     delete[] mat1;
-
-    TurnOffDispatchSystem();
+    delete[] mat2;
 }
 
 void qralg_test(const TaskClass& parameters,
     const bool console_info_output)
 {
-    TurnOffDispatchSystem();
+    InitDispatchSystem();
 
     const int N = parameters.getDataRef().M_ROWS;
     const int B1 = parameters.getDataRef().B_ROWS;
@@ -832,14 +876,13 @@ void qralg_test(const TaskClass& parameters,
         printf("    B1 = %5d, B2 = %5d\n", B1, B2);
         printf("    D1 = %5d, D2 = %5d\n", D1, D2);
     }
-    
-    double* mat_t = new double[N*N];
-    double* mat_dt = new double[N*N];
-    double* mat_b = new double[N*N];
-    double* mat_db = new double[N*N];
-    double* mat_st = new double[N*N];
 
-    const double memory_val = (40.0 * N * N) / (1024 * 1024);
+    double* mat_t  = new double[N*N];
+    double* mat_dt = new double[N*N];
+    double* mat_b  = new double[N*N];
+    double* mat_db = new double[N*N];
+
+    const double memory_val = (32.0 * N * N) / (1024 * 1024);
     fprintf(log_file, "  > Объем выделенной памяти:   [ %.2lf Мб ]\n", memory_val);
     fprintf(log_file, "    ---------------------------------------------------------------\n");
     if (console_info_output)
@@ -854,25 +897,10 @@ void qralg_test(const TaskClass& parameters,
         printf("  > Заполнение массивов...                             ");
     }
     double time_ = clock();
-    generate(mat_st, N, N);
-    memcpy(mat_t, mat_st, N*N*sizeof(double));
-    memcpy(mat_dt, mat_st, N*N*sizeof(double));
-    memcpy(mat_b, mat_st, N*N*sizeof(double));
-    memcpy(mat_db, mat_st, N*N*sizeof(double));
-    time_ = (clock() - time_) / (1.0 * CLOCKS_PER_SEC);
-    fprintf(log_file, "[ %.3lf секунд ]\n", time_);
-    if (console_info_output)
-    {
-        printf("[ %.3lf секунд ]\n", time_);
-    }
-
-    fprintf(log_file, "  > Стандартный QR-алгоритм (WY-разложение)...         ");
-    if (console_info_output)
-    {
-        printf("  > Стандартный QR-алгоритм (WY-разложение)...         ");
-    }
-    time_ = clock();
-    QR_WY_standard(mat_st, N, B2);
+    generate(mat_t, N, N);
+    memcpy(mat_dt, mat_t, N*N*sizeof(double));
+    memcpy(mat_b,  mat_t, N*N*sizeof(double));
+    memcpy(mat_db, mat_t, N*N*sizeof(double));
     time_ = (clock() - time_) / (1.0 * CLOCKS_PER_SEC);
     fprintf(log_file, "[ %.3lf секунд ]\n", time_);
     if (console_info_output)
@@ -949,7 +977,9 @@ void qralg_test(const TaskClass& parameters,
     {
         printf("[ %.3lf секунд ]\n", time_);
     }
+    TurnOffDispatchSystem();
     
+    InitDispatchSystem();
     fprintf(log_file, "  > Двойное блочное переразмещение...                  ");
     if (console_info_output)
     {
@@ -992,46 +1022,33 @@ void qralg_test(const TaskClass& parameters,
         printf("[ %.3lf секунд ]\n\n", time_);
     }
 
-    const double comparison_dbst = compare_arrays(mat_db, mat_st, N*N);
     const double comparison_dbt  = compare_arrays(mat_db, mat_t, N*N) ;
     const double comparison_dbdt = compare_arrays(mat_db, mat_dt, N*N);
     const double comparison_dbb  = compare_arrays(mat_db, mat_b, N*N);
-    const double comparison_bst  = compare_arrays(mat_b, mat_st, N*N);
     const double comparison_bt   = compare_arrays(mat_b, mat_t, N*N);
     const double comparison_bdt  = compare_arrays(mat_b, mat_dt, N*N);
-    const double comparison_dtst = compare_arrays(mat_dt, mat_st, N*N);
     const double comparison_dtt  = compare_arrays(mat_dt, mat_t, N*N);
-    const double comparison_tst  = compare_arrays(mat_t, mat_st, N*N);
 
     fprintf(log_file, "  > Попарное сравнение результатов:\n");
-    fprintf(log_file, "    DIFFERENCE DB - S  [ %.6lf ]\n", comparison_dbst);
     fprintf(log_file, "    DIFFERENCE DB - T  [ %.6lf ]\n", comparison_dbt);
     fprintf(log_file, "    DIFFERENCE DB - DT [ %.6lf ]\n", comparison_dbdt);
     fprintf(log_file, "    DIFFERENCE DB - B  [ %.6lf ]\n", comparison_dbb);
-    fprintf(log_file, "    DIFFERENCE B  - S  [ %.6lf ]\n", comparison_bst);
     fprintf(log_file, "    DIFFERENCE B  - T  [ %.6lf ]\n", comparison_bt);
     fprintf(log_file, "    DIFFERENCE B  - DT [ %.6lf ]\n", comparison_bdt);
-    fprintf(log_file, "    DIFFERENCE DT - S  [ %.6lf ]\n", comparison_dtst);
     fprintf(log_file, "    DIFFERENCE DT - T  [ %.6lf ]\n", comparison_dtt);
-    fprintf(log_file, "    DIFFERENCE T  - S  [ %.6lf ]\n", comparison_tst);
     if (console_info_output)
     {
         printf("  > Попарное сравнение результатов:\n");
-        printf("    DIFFERENCE DB - S  [ %.6lf ]\n", comparison_dbst);
         printf("    DIFFERENCE DB - T  [ %.6lf ]\n", comparison_dbt);
         printf("    DIFFERENCE DB - DT [ %.6lf ]\n", comparison_dbdt);
         printf("    DIFFERENCE DB - B  [ %.6lf ]\n", comparison_dbb);
-        printf("    DIFFERENCE B  - S  [ %.6lf ]\n", comparison_bst);
         printf("    DIFFERENCE B  - T  [ %.6lf ]\n", comparison_bt);
         printf("    DIFFERENCE B  - DT [ %.6lf ]\n", comparison_bdt);
-        printf("    DIFFERENCE DT - S  [ %.6lf ]\n", comparison_dtst);
         printf("    DIFFERENCE DT - T  [ %.6lf ]\n", comparison_dtt);
-        printf("    DIFFERENCE T  - S  [ %.6lf ]\n", comparison_tst);
     }
-    
+
     fclose(log_file);
-    
-    delete[] mat_st;
+
     delete[] mat_t;
     delete[] mat_dt;
     delete[] mat_b;
@@ -1039,11 +1056,4 @@ void qralg_test(const TaskClass& parameters,
 
     TurnOffDispatchSystem();
 }
-/*
-void correctness_test(const TaskClass& params_left,
-    const TaskClass& params_right,
-    const bool       console_info_output = false)
-{
 
-}
-*/

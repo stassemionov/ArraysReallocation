@@ -2162,7 +2162,7 @@ double* QR_WY_double_block(double* A, const TaskData& parameters)
         // (==) A(lamda:M-1, t:N-1) + [Y*(W^t)] * A(lamda:M-1, t:N-1)
 
         // Constructing layout data for WY-matrix
-        WY_task_class.makeData(N, N, b1, b1, db1, db1);
+        WY_task_class = TaskClass(N, N, b1, b1, db1, db1);
         set_minor_double_block(WY, 0, WY_task_class.getDataRef(), d1_shift, d1_shift);
 
         // Multiplication Y * W^t .
