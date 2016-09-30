@@ -369,157 +369,73 @@ static const BlockReallocationInfo* computeCyclesDistribution(
 
 void reallocate_stripe(double* stripe_data,
                        const TaskClass& task_info,
-                       const vector<int>& sdr_vec)
+                       const vector<int>& sdr_vec,
+                       const bool inverse = false)
 {
     const TaskData& data = task_info.getDataRef();
 
-    if (sdr_vec.empty() || (stripe_data == NULL) ||
-        (data.B_ROWS == 0) || (data.B_COLS == 0))
+    if ( sdr_vec.empty()      ||
+        (stripe_data == NULL) ||
+        (data.B_ROWS == 0)    ||
+        (data.B_COLS == 0) )
     {
         return;
     }
 
-    double* buffer1 = new double[data.B_COLS];
-    double* buffer2 = new double[data.B_COLS];
-    double* loc_data_ptr = NULL;
+    int(_fastcall TaskClass::*index_function) (int) const = inverse ?
+        &TaskClass::indexFunctionReducedInverse :
+        &TaskClass::indexFunctionReduced;
+
+    double* buf_mem = (double*) calloc(2*data.B_COLS, sizeof(double));
+    double* src_data_buffer = new(buf_mem)               double[data.B_COLS];
+    double* dst_data_buffer = new(buf_mem + data.B_COLS) double[data.B_COLS];
 
     const int gcd_val = gcd(data.B_COLS, data.DIF_COLS);
     const int standard_width = sizeof(double) * ((data.DIF_COLS == 0) ?
         data.B_COLS : (((data.DIF_COLS > 1) && (gcd_val > 1)) ? gcd_val : 1));
 
-    size_t cycle_counter = 0;
+    size_t sdr_vec_iterator = 0;
+    const size_t sdr_vec_size = sdr_vec.size();
     // Reallocation within the bounds of current block stripe
-    while (cycle_counter < sdr_vec.size())
+    while (sdr_vec_iterator < sdr_vec_size)
     {
-        int i = sdr_vec[cycle_counter];
+        int dst_index = sdr_vec[sdr_vec_iterator];
         int width = standard_width;
-        if (++cycle_counter < sdr_vec.size())
+        if (++sdr_vec_iterator < sdr_vec_size)
         {
-            int next_el = sdr_vec[cycle_counter];
+            const int next_el = sdr_vec[sdr_vec_iterator];
             // Non-standard width of cycle is stored as negative number.
             if (next_el < 0)
             {
                 width = (-next_el) * sizeof(double);
-                ++cycle_counter;
+                ++sdr_vec_iterator;
             }
         }
 
-        memcpy(buffer1, stripe_data + i, width);
-        // Remember place, where we start this cycle
-        const int first_in_cycle = i;
+        memcpy(src_data_buffer, stripe_data + dst_index, width);
+        // Holds place, where we start this cycle
+        const int first_in_cycle = dst_index;
         // Do until cycle beginning isn't reached
         do
         {
-            i = task_info.indexFunctionReduced(i);
-            loc_data_ptr = stripe_data + i;
+            // Calculating of index for destination of copying
+            dst_index = (task_info.*index_function)(dst_index);
+            // Pointer to place, that is destination of copying
+            double* dst_data_ptr = stripe_data + dst_index;
 
-            memcpy(buffer2, loc_data_ptr, width);
-            memcpy(loc_data_ptr, buffer1, width);
-            swap(buffer1, buffer2);
+            // Saving of data, which is locating at destination location now
+            memcpy(dst_data_buffer, dst_data_ptr, width);
+            // Copying of data from source location to destination location
+            memcpy(dst_data_ptr, src_data_buffer, width);
+            // Swapping of source and destination buffer pointes.
+            // Destination data, which was saved at this iteration,
+            // will be used as source data at next iteration.
+            swap(src_data_buffer, dst_data_buffer);
         }
-        while (first_in_cycle != i);
-    }
-    delete[] buffer1;
-    delete[] buffer2;
-}
-
-void reallocate_stripe_inverse(double* stripe_data,
-                               const TaskClass& task_info,
-                               const vector<int>& sdr_vec)
-{
-    const TaskData& data = task_info.getDataRef();
-
-    if (sdr_vec.empty() || (stripe_data == NULL) ||
-        (data.B_ROWS == 0) || (data.B_COLS == 0))
-    {
-        return;
+        while (dst_index != first_in_cycle);
     }
 
-    double* buffer1 = new double[data.B_COLS];
-    double* buffer2 = new double[data.B_COLS];
-    double* loc_data_ptr = NULL;
-
-    const int gcd_val = gcd(data.B_COLS, data.DIF_COLS);
-    const int standard_width = sizeof(double) * ((data.DIF_COLS == 0) ?
-        data.B_COLS : (((data.DIF_COLS > 1) && (gcd_val > 1)) ? gcd_val : 1));
-
-    size_t cycle_counter = 0;
-    // Reallocation within the bounds of current block stripe
-    while (cycle_counter < sdr_vec.size())
-    {
-        int i = sdr_vec[cycle_counter];
-        int width = standard_width;
-        if (++cycle_counter < sdr_vec.size())
-        {
-            int next_el = sdr_vec[cycle_counter];
-            // Non-standard width of cycle is stored as negative number.
-            if (next_el < 0)
-            {
-                width = (-next_el) * sizeof(double);
-                ++cycle_counter;
-            }
-        }
-
-        memcpy(buffer1, stripe_data + i, width);
-        // Remember place, where we start this cycle
-        const int first_in_cycle = i;
-        // Do until cycle beginning isn't reached
-        do
-        {
-            i = task_info.indexFunctionReducedInverse(i);
-            loc_data_ptr = stripe_data + i;
-
-            memcpy(buffer2, loc_data_ptr, width);
-            memcpy(loc_data_ptr, buffer1, width);
-            swap(buffer1, buffer2);
-        } while (first_in_cycle != i);
-    }
-    delete[] buffer1;
-    delete[] buffer2;
-}
-
-const BlockReallocationInfo* standard_to_block_layout_reallocation(
-                                                double* data_ptr,
-                                                const TaskClass& task_info)
-{
-    const TaskData& data = task_info.getDataRef();
-
-    // Systems of distinct representatives for different cycles
-    vector<int> sdr_vec_main, sdr_vec_last_stripe;
-
-    // Learning
-    sdr_vec_main = cycles_distribution_computation(task_info);
-
-    TaskClass subtask_info;
-    if (data.DIF_ROWS != 0)
-    {
-        subtask_info = TaskClass(data.M_ROWS, data.M_COLS, 
-                              data.DIF_ROWS, data.B_COLS);
-        sdr_vec_last_stripe = cycles_distribution_computation(subtask_info);
-    }
-    // Reallocation
-    double* stripe_data_ptr = data_ptr;
-    // Every iteration corresponds to the separate stripe
-    for (int it = 0; it < data.M_ROWS / data.B_ROWS; ++it)
-    {
-        reallocate_stripe(stripe_data_ptr, task_info, sdr_vec_main);
-        stripe_data_ptr += data.STRIPE_SIZE;
-    }
-
-    // Reallocation of last stripe elements,
-    // if count of its rows is less than B_ROWS
-    // (in this case, cycles destribution in last stripe and
-    // in main part of array isn't the same).
-    reallocate_stripe(stripe_data_ptr, subtask_info, sdr_vec_last_stripe);
-
-    const BlockReallocationInfo* res_info =
-        LayoutDataDispatcher::createNewRecord(
-            sdr_vec_main,
-            sdr_vec_last_stripe,
-            task_info,
-            subtask_info);
-
-    return res_info;
+    free(buf_mem);
 }
 
 void standard_to_block_layout_reallocation(
@@ -541,234 +457,6 @@ void standard_to_block_layout_reallocation(
         stripe_data_ptr += main_task_params.STRIPE_SIZE;
     }
     reallocate_stripe(stripe_data_ptr, subtask_data, sdr_vec_addit);
-}
-
-
-const DoubleBlockReallocationInfo* standard_to_double_block_layout_reallocation(
-                                                     double* data_ptr,
-                                                     const TaskClass& task_info)
-{
-    DoubleBlockReallocationInfo* realloc_info = new DoubleBlockReallocationInfo;
-
-    // Firstly, make block reallocation
-    realloc_info->upper_level_realloc_info =
-        standard_to_block_layout_reallocation(data_ptr, task_info);
-
-    // Secondly, every block must be reallocated locally
-    // as well as whole matrix was reallocated just now.
-
-    const TaskData& data = task_info.getDataRef();
-
-    // Learning for all cases...
-    vector<int> sdr_main, sdr_right, sdr_bottom, sdr_corner;
-    vector<int> sdr_main_addit, sdr_right_addit,
-                sdr_bottom_addit, sdr_corner_addit;
-    
-    // Task parameters for different learning cases.
-    TaskClass main_data, main_data_addit, 
-              bottom_data, bottom_data_addit, 
-              right_data, right_data_addit, 
-              corner_data, corner_data_addit;
-
-    // Learning for different relationships of small and big blocks is produced below.
-    // Two main cases are highlighted:
-    // 1. Learning of small blocks distribution in main part of big block.
-    // 2. Learning of small blocks distribution in truncated part of big block.
-    // Big block is b1 x b2 block that can be truncated 
-    // on right and/or bottom side, when there is no multiplicity
-    // of matrix size and block size.
-    // Truncated part is part of big block, which is defined by remainder of
-    // division big block size by small block size.
-    // Main part is part of big block, which is defined by
-    // cutting truncated part off from big block.
-
-    // Learning for main group of big blocks (consists of complete blocks)
-    main_data = TaskClass(data.B_ROWS, data.B_COLS, data.D_ROWS, data.D_COLS);
-    sdr_main = cycles_distribution_computation(main_data);
-    const int loc_rows_shift = data.B_ROWS % data.D_ROWS;
-    // If there is no multiplicity of big and small blocks sizes
-    if (loc_rows_shift != 0)
-    {
-        const int dif_rows_loc = (loc_rows_shift >= data.D_ROWS) ? 
-                                  data.D_ROWS : loc_rows_shift;
-        main_data_addit = TaskClass(dif_rows_loc, data.B_COLS,
-                                 dif_rows_loc, data.D_COLS);
-        sdr_main_addit = cycles_distribution_computation(main_data_addit);
-    }
-
-    // Learning for bottom group of big blocks
-    // (consists of blocks, which is truncated on bottom side)
-    if (data.DIF_ROWS != 0)  // если глобальная сетка некратна размеру матрицы по столбцам
-    {
-        const int loc_block_height = (data.DIF_ROWS >= data.D_ROWS) ?
-                                      data.D_ROWS : data.DIF_ROWS;
-        bottom_data = TaskClass(data.DIF_ROWS, data.B_COLS,
-                             loc_block_height, data.D_COLS);
-        sdr_bottom = cycles_distribution_computation(bottom_data);
-
-        const int dif_rows_loc = data.DIF_ROWS % loc_block_height;
-        // If there is no multiplicity of bottom big and small block size
-        if (dif_rows_loc != 0)
-        {
-            const int db1_bottom = (dif_rows_loc >= data.D_ROWS) ?
-                                    data.D_ROWS : dif_rows_loc;
-            bottom_data_addit = TaskClass(dif_rows_loc, data.B_COLS,
-                                       db1_bottom, data.D_COLS);
-            sdr_bottom_addit = cycles_distribution_computation(bottom_data_addit);
-        }
-    }
-    
-    // Learning for right group of big blocks
-    // (consists of blocks, which is truncated on right side)
-    if (data.DIF_COLS != 0) // если глобальная сетка некратна размеру матрицы по строкам
-    {
-        const int loc_block_width = (data.DIF_COLS >= data.D_COLS) ?
-                                     data.D_COLS : data.DIF_COLS;
-        right_data = TaskClass(data.B_ROWS, data.DIF_COLS,
-                            data.D_ROWS, loc_block_width);
-        sdr_right = cycles_distribution_computation(right_data);
-        const int dif_rows_loc = loc_rows_shift;
-        // If there is no multiplicity of right big and small block size
-        if (dif_rows_loc != 0)
-        {
-            const int db1_bottom = (dif_rows_loc >= data.D_ROWS) ?
-                                    data.D_ROWS : dif_rows_loc;
-            right_data_addit = TaskClass(dif_rows_loc, data.DIF_COLS,
-                                      db1_bottom, loc_block_width);
-            sdr_right_addit = cycles_distribution_computation(right_data_addit);
-        }
-    }
-
-    // Learning for corner big block 
-    // (this block can be truncated on right and bottom side)
-    if ((data.DIF_ROWS != 0) && (data.DIF_COLS != 0))
-    {
-        const int loc_block_height = (data.DIF_ROWS >= data.D_ROWS) ?
-                                      data.D_ROWS : data.DIF_ROWS;
-        const int loc_block_width  = (data.DIF_COLS >= data.D_COLS) ?
-                                      data.D_COLS : data.DIF_COLS;
-        corner_data = TaskClass(data.DIF_ROWS, data.DIF_COLS,
-                             loc_block_height, loc_block_width);
-        sdr_corner = cycles_distribution_computation(corner_data);
-        const int dif_rows_loc = data.DIF_ROWS % loc_block_height;
-        // If there is no multiplicity of corner big and small block size
-        if (dif_rows_loc != 0)
-        {
-            const int db1_bottom = (dif_rows_loc >= data.D_ROWS) ? 
-                                    data.D_ROWS : dif_rows_loc;
-            corner_data_addit = TaskClass(dif_rows_loc, data.DIF_COLS,
-                                       db1_bottom, loc_block_width);
-            sdr_corner_addit = cycles_distribution_computation(corner_data_addit);
-        }
-    }
-    // ... end of learning.
-
-    const BlockReallocationInfo* main_realloc_info = 
-        LayoutDataDispatcher::createNewRecord(
-            sdr_main, sdr_main_addit, main_data, main_data_addit);
-
-    const BlockReallocationInfo* right_realloc_info =
-        LayoutDataDispatcher::createNewRecord(
-            sdr_right, sdr_right_addit, right_data, right_data_addit);
-
-    const BlockReallocationInfo* bottom_realloc_info =
-        LayoutDataDispatcher::createNewRecord(
-            sdr_bottom, sdr_bottom_addit, bottom_data, bottom_data_addit);
-
-    const BlockReallocationInfo* corner_realloc_info =
-        LayoutDataDispatcher::createNewRecord(
-            sdr_corner, sdr_corner_addit, corner_data, corner_data_addit);
-
-    realloc_info->main_realloc_info = main_realloc_info;
-    realloc_info->right_realloc_info = right_realloc_info;
-    realloc_info->bottom_realloc_info = bottom_realloc_info;
-    realloc_info->corner_realloc_info = corner_realloc_info;
-
-    // Reallocation ...
-    for (int ib = 0; ib < data.M_BLOCK_ROWS; ++ib)
-    {
-        const bool is_bottom_incomplete_stripe = (data.DIF_ROWS != 0) &&
-                                                 (ib == data.M_BLOCK_ROWS - 1);
-
-        const int b1  = is_bottom_incomplete_stripe ? data.DIF_ROWS : data.B_ROWS;
-        const int db1 = (is_bottom_incomplete_stripe &&
-                        (data.DIF_ROWS < data.D_ROWS)) ?
-                         data.DIF_ROWS : data.D_ROWS;
-
-        for (int jb = 0; jb < data.M_BLOCK_COLS; ++jb)
-        {
-            const bool is_right_incomplete_stripe = (data.DIF_COLS != 0) &&
-                                                    (jb == data.M_BLOCK_COLS - 1);
-
-            const int b2  = is_right_incomplete_stripe ? data.DIF_COLS :
-                                                         data.B_COLS;
-            const int loc_stripe_size = db1 * b2;
-
-            // Cycles distribution for main part of block,
-            // which is being reallocated
-            vector<int>* sdr_vec;
-
-            // Cycles distribution for truncated part of block,
-            // which is being reallocated.
-            vector<int>* sdr_vec_addit;
-
-            TaskClass *main_parameters, *addit_parameters;
-            if (is_bottom_incomplete_stripe)
-            {
-                if (is_right_incomplete_stripe)
-                {
-                    sdr_vec = &sdr_corner;
-                    sdr_vec_addit = &sdr_corner_addit;
-                    main_parameters = &corner_data;
-                    addit_parameters = &corner_data_addit;
-                }
-                else
-                {
-                    sdr_vec = &sdr_bottom;
-                    sdr_vec_addit = &sdr_bottom_addit;
-                    main_parameters = &bottom_data;
-                    addit_parameters = &bottom_data_addit;
-                }
-            }
-            else
-            {
-                if (is_right_incomplete_stripe)
-                {
-                    sdr_vec = &sdr_right;
-                    sdr_vec_addit = &sdr_right_addit;
-                    main_parameters = &right_data;
-                    addit_parameters = &right_data_addit;
-                }
-                else
-                {
-                    sdr_vec = &sdr_main;
-                    sdr_vec_addit = &sdr_main_addit;
-                    main_parameters = &main_data;
-                    addit_parameters = &main_data_addit;
-                }
-            }
-
-            // Pointer on first element of big block which is being reallocated
-            double* stripe_data_ptr = data_ptr +
-                                      ib * data.B_ROWS * data.M_COLS +
-                                      jb * b1 * data.B_COLS;
-
-            // Reallocation of main part of big block
-            for (int it = 0; it < b1 / db1; ++it)
-            {
-                reallocate_stripe(stripe_data_ptr,
-                                  *main_parameters,
-                                  *sdr_vec);
-                stripe_data_ptr += loc_stripe_size;
-            }
-            // Reallocation of truncated part of big block
-            reallocate_stripe(stripe_data_ptr,
-                              *addit_parameters,
-                              *sdr_vec_addit);
-        }
-    }
-
-    return realloc_info;
 }
 
 void standard_to_double_block_layout_reallocation(
@@ -890,8 +578,8 @@ void standard_to_double_block_layout_reallocation(
 double* block_to_standard_layout_reallocation(double* data_ptr,
                                               const BlockReallocationInfo& realloc_info)
 {
-    const TaskClass main_task_data = realloc_info.main_data;
-    const TaskClass addit_task_data = realloc_info.main_data_addit;
+    const TaskClass& main_task_data = realloc_info.main_data;
+    const TaskClass& addit_task_data = realloc_info.main_data_addit;
     const vector<int>& sdr_vec = realloc_info.sdr_main;
     const vector<int>& sdr_vec_last_stripe = realloc_info.sdr_addit;
     
@@ -900,11 +588,14 @@ double* block_to_standard_layout_reallocation(double* data_ptr,
     // Every iteration corresponds to the separate stripe
     for (int it = 0; it < data.M_ROWS / data.B_ROWS; ++it)
     {
-        reallocate_stripe_inverse(stripe_data_ptr, main_task_data, sdr_vec);
+        reallocate_stripe(stripe_data_ptr, main_task_data, sdr_vec, true);
         stripe_data_ptr += data.STRIPE_SIZE;
     }
 
-    reallocate_stripe_inverse(stripe_data_ptr, addit_task_data, sdr_vec_last_stripe);
+    reallocate_stripe(stripe_data_ptr,
+                      addit_task_data,
+                      sdr_vec_last_stripe,
+                      true);
 
     return data_ptr;
 }

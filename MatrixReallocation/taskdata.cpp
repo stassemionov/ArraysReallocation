@@ -28,7 +28,7 @@ TaskClass::TaskClass(const int& rows_count, const int& cols_count,
     m_data.MAIN_COLS = m_data.M_COLS - m_data.DIF_COLS;
     m_data.STRIPE_SIZE = m_data.B_ROWS * m_data.M_COLS;
     m_data.BLOCK_SIZE = m_data.B_ROWS * m_data.B_COLS;
-    m_data.TRUNC_STRIPE_SIZE = m_data.STRIPE_SIZE - m_data.BLOCK_SIZE;
+    m_data.DIF_BLOCK_SIZE = m_data.DIF_COLS * m_data.B_ROWS;
 }
 
 const TaskData& TaskClass::getDataRef() const

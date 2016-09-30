@@ -7,27 +7,36 @@
 
 using std::vector;
 
+// Stores main layout parameters
+// like size of matrix and blocks,
+// and some high-usage values,
+// that are derived these parameters.
 struct TaskData
 {
-    // Main data
-    int M_ROWS;     // matrix rows count
-    int M_COLS;     // matrix columns count
-    int B_ROWS;     // block rows count
-    int B_COLS;     // block columns count
-    int D_ROWS;     // double block rows count
-    int D_COLS;     // double block columns count
+    // * Main data
+    int M_ROWS;          // matrix rows count
+    int M_COLS;          // matrix columns count
+    int B_ROWS;          // block rows count
+    int B_COLS;          // block columns count
+    int D_ROWS;          // double block rows count
+    int D_COLS;          // double block columns count
 
-    // Additional data (derived from main data)
-    int M_BLOCK_ROWS;       // число блоков в направлении столбца
-    int M_BLOCK_COLS;       // число блоков в направлении строки
-    int DIF_ROWS;           // смещение сетки по столбцу
-    int DIF_COLS;           // смещение сетки по строке
-    int MAIN_COLS;
-    int STRIPE_SIZE;
-    int BLOCK_SIZE;
-    int TRUNC_STRIPE_SIZE;
+    // * Additional data (derived from main data)
+    int M_BLOCK_ROWS;    // number of block-stripes
+    int M_BLOCK_COLS;    // number of block-columns
+    int DIF_ROWS;        // number of rows in bottom-truncated block
+    int DIF_COLS;        // number of columns in right-truncated block
+    int MAIN_COLS;       // number of columns in matrix except truncated blocks
+    int STRIPE_SIZE;     // number of elements in block-stripe
+    int BLOCK_SIZE;      // number of elements in main block
+    int DIF_BLOCK_SIZE;  // number of elements in right-truncated block
 };
 
+// Gives required interface over
+// main layout parameters,
+// that consists in index functions
+// for transformations between
+// standard and block layouts and inversely.
 class TaskClass
 {
 public:
@@ -148,54 +157,37 @@ public:
     // при условии, что передан адрес элемента первой полосы блоков
     inline int _fastcall indexFunctionReduced(const int index) const
     {
-        const int&& i_col = index % m_data.M_COLS;
-      //  const int& curr_block_width = 
-      //      (i_col < m_data.M_COLS - m_data.DIF_COLS) ?
-      //      m_data.B_COLS : m_data.DIF_COLS;
+        const int column = index % m_data.M_COLS;
+        const int cur_block_width = (column < m_data.MAIN_COLS) ?
+            m_data.B_COLS : m_data.DIF_COLS;
 
-        if (i_col < m_data.MAIN_COLS)
-        {
-            // смещение в блочной полосе +
-            // смещение в блоке этой полосы +
-            // смещение в строке этого блока
-            return m_data.BLOCK_SIZE * (i_col / m_data.B_COLS) +
-                m_data.B_COLS * (index / m_data.M_COLS) +
-                i_col % m_data.B_COLS;
-        }
-        else
-        {
-            return m_data.BLOCK_SIZE * (i_col / m_data.B_COLS) +
-                m_data.DIF_COLS * (index / m_data.M_COLS) +
-                i_col % m_data.B_COLS;
-        }
+        // смещение в блочной полосе +
+        // смещение в блоке этой полосы +
+        // смещение в строке этого блока
+        /*return m_data.BLOCK_SIZE * (i_col / m_data.B_COLS) +
+            cur_block_width * (index / m_data.M_COLS) +
+            i_col % m_data.B_COLS;*/
+
+        return m_data.B_ROWS * column +
+            cur_block_width * (index / m_data.M_COLS) -
+            (column % m_data.B_COLS) * (m_data.B_ROWS - 1);
     }
 
     inline int _fastcall indexFunctionReducedInverse(const int index) const
     {
-        const int&& block_number = index / m_data.BLOCK_SIZE;
-        const int&& local_shift = index % m_data.BLOCK_SIZE;
+        const int block_number = index / m_data.BLOCK_SIZE;
+        const int local_shift = index % m_data.BLOCK_SIZE;
+        const int cur_block_width =
+            (m_data.STRIPE_SIZE - index - m_data.DIF_BLOCK_SIZE < 0) ?
+            m_data.DIF_COLS : m_data.B_COLS;
 
-        // if (m_data.STRIPE_SIZE - m_data.BLOCK_SIZE * block_number < m_data.BLOCK_SIZE)
-        if (m_data.TRUNC_STRIPE_SIZE < m_data.BLOCK_SIZE * block_number)
-        {
-            //local_i = local_shift / m_data.DIF_COLS;
-            //local_j = local_shift % m_data.DIF_COLS;
-            //return local_i * m_data.M_COLS + local_j + block_number * m_data.B_COLS;
+        // смещение строками (от строки в блоке) +
+        // смещение в строке (от числа блоков)
+        // смещение в строке (от смещения в блоке)
 
-            return (local_shift / m_data.DIF_COLS) * m_data.M_COLS +
-                   (local_shift % m_data.DIF_COLS) +
-                   block_number * m_data.B_COLS;
-        }
-        else
-        {
-            //const int&& local_i = local_shift / m_data.B_COLS;
-            //const int&& local_j = local_shift % m_data.B_COLS;
-            //return local_i * m_data.M_COLS + local_j + block_number * m_data.B_COLS;
-
-            return (local_shift / m_data.B_COLS) * m_data.M_COLS +
-                   (local_shift % m_data.B_COLS) +
-                   block_number * m_data.B_COLS;
-        }
+        return (local_shift / cur_block_width) * m_data.M_COLS +
+               block_number * m_data.B_COLS +
+               local_shift % cur_block_width;
     }
 
 private:
