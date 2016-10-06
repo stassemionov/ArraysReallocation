@@ -1,7 +1,7 @@
-﻿#include "reallocation.h"
-#include "service.h"
-#include "multiplication.h"
-#include "testing.h"
+﻿#include "../include/reallocation.h"
+#include "../include/service.h"
+#include "../include/multiplication.h"
+#include "../include/testing.h"
 
 #include <fstream>
 #include <ctime>

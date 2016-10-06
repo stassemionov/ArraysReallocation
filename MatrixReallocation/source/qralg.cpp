@@ -1,5 +1,5 @@
-#include "qralg.h"
-#include "service.h"
+#include "../include/qralg.h"
+#include "../include/service.h"
 
 #include <algorithm>
 

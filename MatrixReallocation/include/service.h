@@ -40,19 +40,22 @@ bool _fastcall bin_search(const int val, const vector<int>& vec);
 // containing elements in following order:
 // left matrix parameters, right matrix parameters, generator matrix parameters
 pair<TaskClass, TaskClass> read_multiplication_parameters(
-    const string& file_name = "../mult_parameters.txt");
+    const string& file_name = "../resource/parameter/mult_parameters.txt");
 
 // Writes task parameters from file with name 'file_name'.
 // Returns pointer to dynamic-allocated TaskClass object
-TaskClass read_reallocation_test_parameters(const string& file_name = "../realloc_parameters.txt");
+TaskClass read_reallocation_test_parameters(
+    const string& file_name = "../resource/parameter/realloc_parameters.txt");
 
 // Writes task parameters from file with name 'file_name'.
 // Returns pointer to dynamic-allocated TaskClass object
-TaskClass read_floyd_algorythm_parameters(const string& file_name = "../floyd_parameters.txt");
+TaskClass read_floyd_algorythm_parameters(
+    const string& file_name = "../resource/parameter/floyd_parameters.txt");
 
 // Writes task parameters from file with name 'file_name'.
 // Returns pointer to dynamic-allocated TaskClass object
-TaskClass read_qr_parameters(const string& file_name = "../qr_parameters.txt");
+TaskClass read_qr_parameters(
+    const string& file_name = "../resource/parameter/qr_parameters.txt");
 
 // Copy part of source matrix with double block layout
 // to according part of destinating matrix with the same layout.

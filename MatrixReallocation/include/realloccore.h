@@ -1,7 +1,7 @@
 #ifndef _REALLOCCORE_H_
 #define _REALLOCCORE_H_
 
-#include "../taskdata.h"
+#include "taskdata.h"
 
 // Inplace reallocating of standard-layout matrix to
 // block representation with b1 x b2 blocks.

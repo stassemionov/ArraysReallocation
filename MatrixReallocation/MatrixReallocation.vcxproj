@@ -162,24 +162,24 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="floydalg.cpp" />
-    <ClCompile Include="main.cpp" />
-    <ClCompile Include="multiplication.cpp" />
-    <ClCompile Include="qralg.cpp" />
-    <ClCompile Include="reallocation.cpp" />
-    <ClCompile Include="service.cpp" />
-    <ClCompile Include="taskdata.cpp" />
-    <ClCompile Include="testing.cpp" />
+    <ClCompile Include="source\floydalg.cpp" />
+    <ClCompile Include="source\main.cpp" />
+    <ClCompile Include="source\multiplication.cpp" />
+    <ClCompile Include="source\qralg.cpp" />
+    <ClCompile Include="source\reallocation.cpp" />
+    <ClCompile Include="source\service.cpp" />
+    <ClCompile Include="source\taskdata.cpp" />
+    <ClCompile Include="source\testing.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="floydalg.h" />
+    <ClInclude Include="include\floydalg.h" />
+    <ClInclude Include="include\multiplication.h" />
+    <ClInclude Include="include\qralg.h" />
+    <ClInclude Include="include\reallocation.h" />
     <ClInclude Include="include\realloccore.h" />
-    <ClInclude Include="multiplication.h" />
-    <ClInclude Include="qralg.h" />
-    <ClInclude Include="reallocation.h" />
-    <ClInclude Include="service.h" />
-    <ClInclude Include="taskdata.h" />
-    <ClInclude Include="testing.h" />
+    <ClInclude Include="include\service.h" />
+    <ClInclude Include="include\taskdata.h" />
+    <ClInclude Include="include\testing.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

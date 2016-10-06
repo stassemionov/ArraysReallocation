@@ -1,9 +1,9 @@
-#include "testing.h"
-#include "reallocation.h"
-#include "multiplication.h"
-#include "floydalg.h"
-#include "qralg.h"
-#include "service.h"
+#include "../include/testing.h"
+#include "../include/reallocation.h"
+#include "../include/multiplication.h"
+#include "../include/floydalg.h"
+#include "../include/qralg.h"
+#include "../include/service.h"
 
 #include <cstring>
 #include <ctime>
@@ -21,7 +21,7 @@ Blocks select_optimal_double_block_size_multiplication(const int N,
     const bool         console_info_output)
 {
     FILE* log_file;
-    fopen_s(&log_file, "../double_block_selection_test_log.txt", "w+");
+    fopen_s(&log_file, "../resource/log/double_block_selection_test_log.txt", "w+");
 
     fprintf(log_file, "\n [> Подбор параметров двойного блочного размещения...\n");
     fprintf(log_file, "  > Обозначения:\n");
@@ -256,7 +256,7 @@ void matrix_multiplication_tests(const TaskClass& params_left,
     const int D3 = params_right.getDataRef().D_COLS;
 
     FILE* log_file;
-    fopen_s(&log_file, "../mult_test_log.txt", "a");
+    fopen_s(&log_file, "../resource/log/mult_test_log.txt", "a");
 
     fprintf(log_file, "\n [> Запуск тестов для параметров:\n");
     fprintf(log_file, "    N1 = %5d, N2 = %5d, N3 = %5d\n", N1, N2, N3);
@@ -511,7 +511,7 @@ void floyd_test(const TaskClass& parameters,
     const int B = parameters.getDataRef().B_ROWS;
 
     FILE* log_file;
-    fopen_s(&log_file, "../floyd_test_log.txt", "a");
+    fopen_s(&log_file, "../resource/log/floyd_test_log.txt", "a");
 
     fprintf(log_file, " [> Запуск тестов для параметров:\n");
     fprintf(log_file, "    N = %5d\n", N);
@@ -729,7 +729,7 @@ void reallocation_test(const TaskClass& parameters,
     const int D2 = data_ref.D_COLS;
 
     FILE* log_file;
-    fopen_s(&log_file, "../reallocation_test_log.txt", "a");
+    fopen_s(&log_file, "../resource/log/reallocation_test_log.txt", "a");
 
     fprintf(log_file, "\n [> Запуск тестов для параметров:\n");
     fprintf(log_file, "    N1 = %5d, N2 = %5d\n", N1, N2);
@@ -862,7 +862,7 @@ void qralg_test(const TaskClass& parameters,
     const int D2 = parameters.getDataRef().D_COLS;
 
     FILE* log_file;
-    fopen_s(&log_file, "../qralg_test_log.txt", "a");
+    fopen_s(&log_file, "../resource/log/qralg_test_log.txt", "a");
     
     fprintf(log_file, "\n [> Запуск тестов для параметров:\n");
     fprintf(log_file, "    N = %5d\n", N);

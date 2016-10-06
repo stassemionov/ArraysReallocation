@@ -1,4 +1,4 @@
-#include "floydalg.h"
+#include "../include/floydalg.h"
 
 #include <algorithm>
 
