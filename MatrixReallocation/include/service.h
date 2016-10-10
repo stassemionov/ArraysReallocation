@@ -33,7 +33,7 @@ int _fastcall gcd(const int u, const int v);
 
 // Search 'val' in vector 'vec' with binary search,
 // return true or false
-bool _fastcall bin_search(const int val, const vector<int>& vec);
+int _fastcall bin_search(const int val, const vector<int>& vec);
 
 // Writes task parameters from file with name 'file_name'.
 // Returns 3-element dynamic array of TaskClass objects,

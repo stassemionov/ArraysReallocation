@@ -94,7 +94,7 @@ int _fastcall gcd(const int u, const int v)
     return gcd((v - u) >> 1, u);
 }
 
-bool _fastcall bin_search(const int val, const vector<int>& vec)
+int _fastcall bin_search(const int val, const vector<int>& vec)
 {
     if (vec.empty())
     {
@@ -124,7 +124,7 @@ bool _fastcall bin_search(const int val, const vector<int>& vec)
             r = m;
         }
     }
-    return vec[r] == val;
+    return (vec[r] == val) ? r : -1;
 }
 
 pair<TaskClass, TaskClass> read_multiplication_parameters(

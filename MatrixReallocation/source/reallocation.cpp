@@ -4,6 +4,7 @@
 
 #include <cmath>
 #include <algorithm>
+#include <ctime>
 
 using std::sort;
 using std::swap;
@@ -152,6 +153,152 @@ double* map_with_double_block_layout(
 // Gives basic interface to work with
 // vectors, that contains SDR for cycles
 // of current reallocation pattern.
+class SDRProcessingDispatcher
+{
+    void writeWidthToLeft(const int iteration_step)
+    {
+        // If current cycle is already marked as non-standad-width one...
+        if (m_sdr_vec_left.back() < 0)
+        {
+            // ...then its width must be increased
+            // with value of statdard cycle.
+            m_sdr_vec_left.back() -= iteration_step;
+        }
+        else
+        {
+            // Else, there is a parallel cycle found.
+            // Indicating its nonstandard (double) width -
+            // add to SDR-vector its value.
+            m_sdr_vec_left.push_back(-2 * iteration_step);
+        }
+    }
+
+    void writeWidthToRight(const int iteration_step)
+    {
+        int& last_el = m_sdr_vec_right.back();
+        // If current cycle is already marked as non-standad-width one...
+        if (last_el < 0)
+        {
+            // ...then its width must be increased
+            // with value of statdard cycle.
+            last_el += iteration_step;
+            m_sdr_vec_right[m_sdr_vec_right.size() - 2] += iteration_step;
+        }
+        else
+        {
+            // Else, there is a parallel cycle found.
+            // Indicating its nonstandard (double) width -
+            // add to SDR-vector its value.
+            last_el += iteration_step;
+            m_sdr_vec_right.push_back(2 * iteration_step);
+        }
+    }
+
+public:
+    SDRProcessingDispatcher() {};
+    
+    // Joins left- and right-passing SDR-vectors into single vector,
+    // that contains SDR for all cycles of current permutation.
+    inline const vector<int> getCompleteSDRVec() const
+    {
+        vector<int> full_sdr_vec(m_sdr_vec_left.begin(), m_sdr_vec_left.end());
+        full_sdr_vec.insert(full_sdr_vec.end(), m_sdr_vec_right.begin(), m_sdr_vec_right.end());
+        return full_sdr_vec;
+    }
+
+    inline bool _fastcall isNewCycle(
+        const int index,
+        const int left_bound,
+        const int right_bound,
+        const TaskClass& task_data) const
+    {
+        int next_straight = index;
+        int next_backwards = index;
+        do
+        {
+            if ((next_straight  < left_bound) || (next_straight  > right_bound) ||
+                (next_backwards < left_bound) || (next_backwards > right_bound))
+            {
+                return false;
+            }
+            next_straight  = task_data.indexFunctionReduced(next_straight);
+            next_backwards = task_data.indexFunctionReducedInverse(next_backwards);
+        }
+        while ((next_straight != index) && (next_backwards != index));
+
+        return true;
+    }
+
+    // Addes element to SDR-vector defining new cycle.
+    inline void specifyNewCycle(const int index, const int direction)
+    {
+        if (direction > 0)
+        {
+            m_sdr_vec_left.push_back(index);
+        }
+        else
+        {
+            m_sdr_vec_right.push_back(index);
+        }
+    }
+
+    void writeNonstandardWidth(const int iteration_step, const int direction)
+    {
+        if (direction > 0)
+        {
+            this->writeWidthToLeft(iteration_step);
+        }
+        else
+        {
+            this->writeWidthToRight(iteration_step);
+        }
+    }
+
+    size_t getStoredCount(const int key = 0) const
+    {
+        switch (key)
+        {
+            case 0:
+                return m_sdr_vec_left.size() + m_sdr_vec_right.size();
+            case -1:
+                return m_sdr_vec_right.size();
+            case 1:
+                return m_sdr_vec_left.size();
+        }
+        return 0;
+    }
+
+    void printSDR() const
+    {
+        printf("\n\nLEFT  (%3d) : ", m_sdr_vec_left.size());
+        for (size_t i = 0; i < m_sdr_vec_left.size(); ++i)
+        {
+            printf("%d ", m_sdr_vec_left[i]);
+        }
+
+        printf("\nRIGHT (%3d) : ", m_sdr_vec_right.size());
+        for (size_t i = 0; i < m_sdr_vec_right.size(); ++i)
+        {
+            printf("%d ", m_sdr_vec_right[i]);
+        }
+        printf("\n\n");
+    }
+
+private:
+    // System of distinct representatives of cycles (SDR).
+    // These vectors have strucure as follows:
+    // <el_0> <width_0> <el_1> <width_1> ... , where
+    // 'el_i' is element of SDR,
+    // 'width_i' is width of cycle, which is defined by element 'el_i'.
+    // Require O(b1) memory, because we have O(b1) cycles on average.
+    vector<int> m_sdr_vec_left;
+    vector<int> m_sdr_vec_right;
+};
+
+/*
+// Gives basic interface to work with
+// vectors, that contains SDR for cycles
+// of current reallocation pattern.
 class CycleIndexDispatcher
 {
 public:
@@ -199,13 +346,13 @@ public:
             {
                 return false;
             }
-            if (bin_search(next, m_help_vec))
+            if (bin_search(next, m_help_vec) > 0)
             {
                 return false;
             }
             next = task_data.indexFunctionReduced(next);
         } while (next != start_index);
-
+    
         return true;
     }
 
@@ -303,8 +450,10 @@ private:
     vector<int> m_help_vec;
 };
 
+
 const vector<int> cycles_distribution_computation(const TaskClass& task_info)
 {
+    double time_ = clock();
     const TaskData& data = task_info.getDataRef();
 
     CycleIndexDispatcher dispatcher(data.B_ROWS);
@@ -404,9 +553,11 @@ const vector<int> cycles_distribution_computation(const TaskClass& task_info)
             if (!is_the_same_cycle)
             {
                 dispatcher.specifyNewCycle(min_index);
-               // printf("\nMIN = %d\nMAX = %d\nLEN = %d\n",
-               //     min_index, data.M_COLS*data.B_ROWS - max_index, length);
-               // system("pause");
+                //printf("\nMIN = %d\nMAX = %d\nLEN = %d\n",
+                //    min_index - data.B_COLS,
+                //    (data.M_COLS*data.B_ROWS - max_index - 1) - data.DIF_COLS,
+                //    length);
+                //system("pause");
             }
             previous_min = min_index;
             previous_max = max_index;
@@ -436,9 +587,153 @@ const vector<int> cycles_distribution_computation(const TaskClass& task_info)
     
     // printf("\n\n HELP %zd\n", dispatcher.getHelpVecRef().size());
     // printf("\n SDR %zd\n\n", dispatcher.getSDRVecRef().size());
-    // system("pause");
+
+    time_ = (clock() - time_) / (1.0 * CLOCKS_PER_SEC);
+    printf("\nSEARCHING TIME = %lf\n", time_);
+//    system("pause");
 
     return dispatcher.getSDRVecRef();
+}
+*/
+
+const vector<int> cycles_distribution_computation(const TaskClass& task_info)
+{
+//    double time_ = clock();
+
+    const TaskData& data = task_info.getDataRef();
+
+    SDRProcessingDispatcher dispatcher;
+    // Count of iterations to be done (sum of all cycles lengths).
+    const int iterations_count = (data.DIF_COLS == 0) ?
+        (data.B_ROWS * data.M_COLS - 2 * data.B_COLS) :
+        (data.B_ROWS * data.M_COLS - data.B_COLS - data.DIF_COLS);
+    // Greatest Common Divisor of first and last block-column widths.
+    const int gcd_val = gcd(data.B_COLS, data.DIF_COLS);
+    // Iteration step.
+    // In case of multiplicity, minimum width for all cycles equals 'b2'.
+    // It means, we can transfer at least 'b2' elements with one step.
+    // Otherwise, minimum cycle width equals GCD('b2','N2' mod 'b2').
+    const int step_value = (data.DIF_COLS == 0) ? data.B_COLS : gcd_val;
+    // Iterations starts with 'b2'-th element,
+    // because first 'b2' elements don't need to be transfer.
+    int i = data.B_COLS;
+
+    int previous_min_left = -step_value - 1;
+    int previous_max_left = -step_value - 1;
+    int previous_len_left = -step_value - 1;
+    int next_cycle_begining_left = data.B_COLS;
+    int previous_min_right = data.STRIPE_SIZE + step_value + 1;
+    int previous_max_right = data.STRIPE_SIZE + step_value + 1;
+    int previous_len_right = data.STRIPE_SIZE + step_value + 1;
+    int next_cycle_begining_right = (data.DIF_COLS == 0) ? 
+        (data.STRIPE_SIZE - data.B_COLS - 1) :
+        (data.STRIPE_SIZE - data.DIF_COLS - 1);
+
+    int it = 0;
+    int direction = 1;
+    int step = step_value;
+
+    // Do until all cycles aren't passed.
+    while (it < iterations_count)
+    {
+        // Current cycle length.
+        int length = 0;
+        // Minimum index in current cycle.
+        int min_index = data.M_COLS * data.B_ROWS;
+        // Maximum index in current cycle.
+        int max_index = 0;
+        // Index, that is the starting point of current pass.
+        const int first = i;
+        // Do until cycle beginning isn't reached
+        // (first element of current pass).
+        do
+        {
+            // Going to the next position in current cycle
+            i = task_info.indexFunctionReduced(i);
+
+            // Statistics collecting...
+            if (min_index > i)
+            {
+                min_index = i;
+            }
+            if (max_index < i)
+            {
+                max_index = i;
+            }
+            ++length;
+            it += step_value;
+        }
+        while (i != first);
+
+        // We don't need to collect indices of cycles with 1 element
+        if (length > 1)
+        {
+            int& previous_len = (direction > 0) ? previous_len_left : previous_len_right;
+            int& previous_min = (direction > 0) ? previous_min_left : previous_min_right;
+            int& previous_max = (direction > 0) ? previous_max_left : previous_max_right;
+            // Sign of new cycle indication.
+            bool is_the_same_cycle = false;
+            // If new and previous cycles are parallel,
+            // then they are parts of single wider cycle.
+            if (length == previous_len)
+            if (min_index == previous_min + step)
+            if (max_index == previous_max + step)
+            if (task_info.indexFunctionReduced(min_index) ==
+                task_info.indexFunctionReduced(previous_min) + step)
+            if (task_info.indexFunctionReduced(max_index) ==
+                task_info.indexFunctionReduced(previous_max) + step)
+            {
+                is_the_same_cycle = true;
+                dispatcher.writeNonstandardWidth(step, direction);
+            }
+            // If new cycle was found, then insert
+            // its starting index to the SDR-vector.
+            if (!is_the_same_cycle)
+            {
+                const int left_bound_of_stripe = (direction > 0) ?
+                    min_index : (min_index + direction*(step_value-1));
+                dispatcher.specifyNewCycle(left_bound_of_stripe, direction);
+            }
+            previous_len = length;
+            previous_min = min_index;
+            previous_max = max_index;
+        }
+
+        ((direction > 0) ?
+            next_cycle_begining_left :
+            next_cycle_begining_right) += step;
+
+        if (it < iterations_count)
+        {
+            // Next cycle searching...
+            direction = -direction;
+            step = direction * step_value;
+            int& starting_index = (direction > 0) ?
+                next_cycle_begining_left :
+                next_cycle_begining_right;
+
+            while (!dispatcher.isNewCycle(
+                starting_index,
+                next_cycle_begining_left,
+                next_cycle_begining_right,
+                task_info) )
+            {
+                starting_index += step;
+            }
+
+            i = starting_index;
+        }
+    }
+    // End of cycles distribution computing.
+
+//    printf("\n SDR %d\n\n", dispatcher.getStoredCount());
+//    dispatcher.printSDR();
+
+//    time_ = (clock() - time_) / (1.0 * CLOCKS_PER_SEC);
+//    printf("\nSEARCHING TIME = %lf\n", time_);
+//    system("pause");
+
+    return dispatcher.getCompleteSDRVec();
 }
 
 const BlockReallocationInfo* computeCyclesDistribution(
