@@ -66,4 +66,33 @@
       <Filter>Заголовочные файлы</Filter>
     </ClInclude>
   </ItemGroup>
+  <ItemGroup>
+    <Text Include="..\resource\parameter\floyd_parameters.txt">
+      <Filter>Файлы ресурсов</Filter>
+    </Text>
+    <Text Include="..\resource\parameter\mult_parameters.txt">
+      <Filter>Файлы ресурсов</Filter>
+    </Text>
+    <Text Include="..\resource\parameter\qr_parameters.txt">
+      <Filter>Файлы ресурсов</Filter>
+    </Text>
+    <Text Include="..\resource\parameter\realloc_parameters.txt">
+      <Filter>Файлы ресурсов</Filter>
+    </Text>
+    <Text Include="..\resource\log\double_block_selection_test_log.txt">
+      <Filter>Файлы ресурсов</Filter>
+    </Text>
+    <Text Include="..\resource\log\floyd_test_log.txt">
+      <Filter>Файлы ресурсов</Filter>
+    </Text>
+    <Text Include="..\resource\log\mult_test_log.txt">
+      <Filter>Файлы ресурсов</Filter>
+    </Text>
+    <Text Include="..\resource\log\qralg_test_log.txt">
+      <Filter>Файлы ресурсов</Filter>
+    </Text>
+    <Text Include="..\resource\log\reallocation_test_log.txt">
+      <Filter>Файлы ресурсов</Filter>
+    </Text>
+  </ItemGroup>
 </Project>

@@ -80,6 +80,7 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>false</LinkIncremental>
+    <IncludePath>$(ICIncludeDir);$(IncludePath);./include;</IncludePath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -180,6 +181,17 @@
     <ClInclude Include="include\service.h" />
     <ClInclude Include="include\taskdata.h" />
     <ClInclude Include="include\testing.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <Text Include="..\resource\log\double_block_selection_test_log.txt" />
+    <Text Include="..\resource\log\floyd_test_log.txt" />
+    <Text Include="..\resource\log\mult_test_log.txt" />
+    <Text Include="..\resource\log\qralg_test_log.txt" />
+    <Text Include="..\resource\log\reallocation_test_log.txt" />
+    <Text Include="..\resource\parameter\floyd_parameters.txt" />
+    <Text Include="..\resource\parameter\mult_parameters.txt" />
+    <Text Include="..\resource\parameter\qr_parameters.txt" />
+    <Text Include="..\resource\parameter\realloc_parameters.txt" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

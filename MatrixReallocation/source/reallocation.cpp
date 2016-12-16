@@ -1,6 +1,6 @@
-﻿#include "../include/realloccore.h"
-#include "../include/reallocation.h"
-#include "../include/service.h"
+﻿#include "realloccore.h"
+#include "reallocation.h"
+#include "service.h"
 
 #include <cmath>
 #include <algorithm>
@@ -202,7 +202,8 @@ public:
     inline const vector<int> getCompleteSDRVec() const
     {
         vector<int> full_sdr_vec(m_sdr_vec_left.begin(), m_sdr_vec_left.end());
-        full_sdr_vec.insert(full_sdr_vec.end(), m_sdr_vec_right.begin(), m_sdr_vec_right.end());
+        full_sdr_vec.insert(full_sdr_vec.end(),
+            m_sdr_vec_right.begin(), m_sdr_vec_right.end());
         return full_sdr_vec;
     }
 
@@ -598,6 +599,7 @@ const vector<int> cycles_distribution_computation(const TaskClass& task_info)
 
 const vector<int> cycles_distribution_computation(const TaskClass& task_info)
 {
+//    printf(" START\n");
 //    double time_ = clock();
 
     const TaskData& data = task_info.getDataRef();
@@ -697,7 +699,10 @@ const vector<int> cycles_distribution_computation(const TaskClass& task_info)
             previous_len = length;
             previous_min = min_index;
             previous_max = max_index;
+
+ //           printf(" LENGTH %d\n", length);
         }
+
 
         ((direction > 0) ?
             next_cycle_begining_left :
@@ -727,6 +732,8 @@ const vector<int> cycles_distribution_computation(const TaskClass& task_info)
     // End of cycles distribution computing.
 
 //    printf("\n SDR %d\n\n", dispatcher.getStoredCount());
+//    printf(" MIN LEFT %d\n", previous_min_left);
+//    printf(" MIN RIGHT %d\n",previous_min_right);
 //    dispatcher.printSDR();
 
 //    time_ = (clock() - time_) / (1.0 * CLOCKS_PER_SEC);

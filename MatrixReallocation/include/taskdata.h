@@ -4,8 +4,10 @@
 #include <cstdlib>
 #include <cmath>
 #include <vector>
+#include <algorithm>
 
 using std::vector;
+using std::min;
 
 // Stores main layout parameters
 // like size of matrix and blocks,
@@ -160,14 +162,15 @@ public:
         const int column = index % m_data.M_COLS;
         const int cur_block_width = (column < m_data.MAIN_COLS) ?
             m_data.B_COLS : m_data.DIF_COLS;
-
+       
         // смещение в блочной полосе +
         // смещение в блоке этой полосы +
         // смещение в строке этого блока
-        /*return m_data.BLOCK_SIZE * (i_col / m_data.B_COLS) +
+        /*return m_data.BLOCK_SIZE * (column / m_data.B_COLS) +
             cur_block_width * (index / m_data.M_COLS) +
-            i_col % m_data.B_COLS;*/
-
+            column % m_data.B_COLS;*/
+     
+        // Optimized version.
         return m_data.B_ROWS * column +
             cur_block_width * (index / m_data.M_COLS) -
             (column % m_data.B_COLS) * (m_data.B_ROWS - 1);

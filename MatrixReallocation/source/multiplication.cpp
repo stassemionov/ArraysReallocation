@@ -1,4 +1,4 @@
-#include "../include/multiplication.h"
+#include "multiplication.h"
 
 #include <algorithm>
 

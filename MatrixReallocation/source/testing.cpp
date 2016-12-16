@@ -1,9 +1,9 @@
-#include "../include/testing.h"
-#include "../include/reallocation.h"
-#include "../include/multiplication.h"
-#include "../include/floydalg.h"
-#include "../include/qralg.h"
-#include "../include/service.h"
+#include "testing.h"
+#include "reallocation.h"
+#include "multiplication.h"
+#include "floydalg.h"
+#include "qralg.h"
+#include "service.h"
 
 #include <cstring>
 #include <ctime>
