@@ -37,7 +37,7 @@ const TaskData& TaskClass::getDataRef() const
     return m_data;
 }
 
-int _fastcall TaskClass::indexFunctionDbl(const int i_index,
+int TaskClass::indexFunctionDbl(const int i_index,
     const int j_index) const
 {
     // Координаты текущего большого блока
@@ -96,7 +96,7 @@ int _fastcall TaskClass::indexFunctionDbl(const int i_index,
         (b_loc_j - d_col * db2);
 }
 
-int _fastcall TaskClass::indexFunction(const int index) const
+int TaskClass::indexFunction(const int index) const
 {
     // Разложение адреса на строчную и столбцовую составляющие
     const int index_i = index / m_data.M_COLS;

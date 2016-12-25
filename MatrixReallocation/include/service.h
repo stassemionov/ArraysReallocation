@@ -25,15 +25,15 @@ void print_to(ostream& ostr, const double* data_ptr, const int rows_count,
 
 // Use sum of absolute values of arrays elements differences
 // as measure of arrays difference
-double _fastcall compare_arrays(const double* data1, const double* data2,
+double compare_arrays(const double* data1, const double* data2,
                       const size_t length);
 
 // Binary Euclidean agorythm
-int _fastcall gcd(const int u, const int v);
+int gcd(const int u, const int v);
 
 // Search 'val' in vector 'vec' with binary search,
 // return true or false
-int _fastcall bin_search(const int val, const vector<int>& vec);
+int bin_search(const int val, const vector<int>& vec);
 
 // Writes task parameters from file with name 'file_name'.
 // Returns 3-element dynamic array of TaskClass objects,

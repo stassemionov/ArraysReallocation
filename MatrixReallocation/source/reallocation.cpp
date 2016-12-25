@@ -1,6 +1,7 @@
 ﻿#include "reallocation.h"
 #include "service.h"
 
+#include <cstring>
 #include <algorithm>
 
 using std::sort;
@@ -197,7 +198,7 @@ public:
         return full_sdr_vec;
     }
 
-    bool _fastcall isNewCycle(
+    bool isNewCycle(
         const int index,
         const int left_bound,
         const int right_bound,

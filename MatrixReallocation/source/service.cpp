@@ -2,6 +2,7 @@
 
 #include <iomanip>
 #include <fstream>
+#include <cstring>
 #include <algorithm>
 
 using std::min;
@@ -52,7 +53,7 @@ void print_to(ostream& ostr, const double* data_ptr,
     ostr << '\n';
 }
 
-double _fastcall compare_arrays(
+double compare_arrays(
     const double* data1, const double* data2, const size_t length)
 {
     double s(0.0);
@@ -63,7 +64,7 @@ double _fastcall compare_arrays(
     return s;
 }
 
-int _fastcall gcd(const int u, const int v)
+int gcd(const int u, const int v)
 {
     // simple cases (termination)
     if (u == v)
@@ -94,7 +95,7 @@ int _fastcall gcd(const int u, const int v)
     return gcd((v - u) >> 1, u);
 }
 
-int _fastcall bin_search(const int val, const vector<int>& vec)
+int bin_search(const int val, const vector<int>& vec)
 {
     if (vec.empty())
     {
