@@ -4,7 +4,7 @@
 #include "testing.h"
 
 //#include <fstream>
-//#include <ctime>
+#include <ctime>
 
 // Сделать!
 //  1) Найти нестандартные эффективные способы обхода циклов                             (СЛОЖНО)
@@ -17,26 +17,9 @@
 //  6) Сделать функцию тестирующую всё                                                   (ПРОСТО)
 //  7) Изменить проверку для теста переразмещения                                        (ПРОСТО)
 
-/*
-C = A * B
-Размещение матрицы A
-- Матрица A разбивается на блоки, блоки - на подблоки
-- блоки размещены по строкам
-- подблоки размещены по столбцам
-- элементы матрицы внутри подблока размещены по столбцам
-
-Размещение матрицы B и C
-- матрицы разбиваются на блоки
-- блоки размещены по строкам.
-- элементы внутри блоков размещены по строкам
-*/
-
-
 int main()
 {
     setlocale(LC_ALL, "");
-
-    InitDispatchSystem();
 
 //    const TaskClass& floyd_params   = read_floyd_algorythm_parameters();
 //    const TaskClass& qr_params      = read_qr_parameters();
@@ -48,18 +31,35 @@ int main()
 //    matrix_multiplication_tests(mult_params.first, mult_params.second, true);
 //    reallocation_test(realloc_params, false);
 
-    double* A = new double[25];
-    for (int i = 0; i < 25; ++i)
+    int N1 = 4014, N2 = 4033, B1 = 411, B2 = 422, D1 = 86, D2 = 85;
+    double* A = new double[N1 * N2], *B = new double[N1 * N2];
+    for (int i = 0; i < N1 * N2; ++i)
     {
         A[i] = i;
     }
-    standard_to_transposed_double_block_layout_reallocation(A, 5, 5, 5, 5, 3, 4);
-    for (int i = 0; i < 25; ++i)
-    {
-        printf("%lf\n", A[i]);
-    }
-    printf("\n");
-    delete[] A;
+    memcpy(B, A, N1 * N2 * sizeof(double));
 
+    double time_ = clock();
+
+    InitDispatchSystem();
+    standard_to_transposed_double_block_layout_reallocation(A, N1, N2, B1, B2, D1, D2);
+    printf("\n AAAA \n");
+    transposed_double_block_to_standard_layout_reallocation(A, N1, N2, B1, B2, D1, D2);
+    printf("\n %lf %lf \n",
+        compare_arrays(A, B, N1 * N2),
+        (clock() - time_) / (1.0 * CLOCKS_PER_SEC));
+
+
+    time_ = clock();
+
+    standard_to_double_block_layout_reallocation(A, N1, N2, B1, B2, D1, D2);
+    printf("\n AAAA \n");
+    double_block_to_standard_layout_reallocation(A, N1, N2, B1, B2, D1, D2);
     TurnOffDispatchSystem();
+    printf("\n %lf %lf \n",
+        compare_arrays(A, B, N1 * N2),
+        (clock() - time_) / (1.0 * CLOCKS_PER_SEC));
+
+    delete[] A;
+    delete[] B;
 }

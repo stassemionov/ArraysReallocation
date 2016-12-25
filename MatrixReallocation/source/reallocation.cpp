@@ -1,9 +1,7 @@
 ﻿#include "reallocation.h"
 #include "service.h"
 
-#include <cmath>
 #include <algorithm>
-#include <ctime>
 
 using std::sort;
 using std::swap;
@@ -561,7 +559,7 @@ void standard_to_block_layout_reallocation(
     const vector<int>& sdr_vec_main  = realloc_info.sdr_main;
     const vector<int>& sdr_vec_addit = realloc_info.sdr_addit;
     double* stripe_data_ptr = data_ptr;
-    
+
     if (sdr_vec_main.empty() || (stripe_data_ptr == nullptr) ||
         (main_task_params.B_ROWS == 0) || (main_task_params.B_COLS == 0))
     {
@@ -590,8 +588,7 @@ void standard_to_double_block_layout_reallocation(
     // as well as whole matrix was reallocated just now.
 
     // Unpacking reallocation data from parameter 'realloc_info'
-    const TaskData& nlevel_data = realloc_info.upper_level_realloc_info->main_data.getDataRef();
-    const TaskData& blevel_data = realloc_info.main_realloc_info->main_data.getDataRef();
+    const TaskData& uplevel_data = realloc_info.upper_level_realloc_info->main_data.getDataRef();
     // SDR-vectors for different cycles distribution cases
     const vector<int>& sdr_main = realloc_info.main_realloc_info->sdr_main;
     const vector<int>& sdr_main_addit = realloc_info.main_realloc_info->sdr_addit;
@@ -612,24 +609,15 @@ void standard_to_double_block_layout_reallocation(
     const TaskClass& corner_data_addit = realloc_info.corner_realloc_info->main_data_addit;
 
     // Reallocation ...
-    for (int ib = 0; ib < nlevel_data.M_BLOCK_ROWS; ++ib)
+    for (int ib = 0; ib < uplevel_data.M_BLOCK_ROWS; ++ib)
     {
-        const bool is_bottom_incomplete_stripe = (nlevel_data.DIF_ROWS != 0) &&
-            (ib == nlevel_data.M_BLOCK_ROWS - 1);
+        const bool is_bottom_incomplete_stripe = (uplevel_data.DIF_ROWS != 0) &&
+            (ib == uplevel_data.M_BLOCK_ROWS - 1);
 
-        const int b1 = is_bottom_incomplete_stripe ? nlevel_data.DIF_ROWS : nlevel_data.B_ROWS;
-        const int db1 = (is_bottom_incomplete_stripe &&
-            (nlevel_data.DIF_ROWS < blevel_data.B_ROWS)) ?
-            nlevel_data.DIF_ROWS : blevel_data.B_ROWS;
-
-        for (int jb = 0; jb < nlevel_data.M_BLOCK_COLS; ++jb)
+        for (int jb = 0; jb < uplevel_data.M_BLOCK_COLS; ++jb)
         {
-            const bool is_right_incomplete_stripe = (nlevel_data.DIF_COLS != 0) &&
-                (jb == nlevel_data.M_BLOCK_COLS - 1);
-
-            const int b2 = is_right_incomplete_stripe ? nlevel_data.DIF_COLS :
-                nlevel_data.B_COLS;
-            const int loc_stripe_size = db1 * b2;
+            const bool is_right_incomplete_stripe = (uplevel_data.DIF_COLS != 0) &&
+                (jb == uplevel_data.M_BLOCK_COLS - 1);
 
             // Cycles distribution for main part of block,
             // which is being reallocated.
@@ -652,7 +640,7 @@ void standard_to_double_block_layout_reallocation(
                     sdr_vec_addit = &sdr_corner_addit;
                     main_parameters = &corner_data;
                     addit_parameters = &corner_data_addit;
-                    transpose_info = realloc_info.main_transpose_info;
+                    transpose_info = realloc_info.corner_transpose_info;
                 }
                 else
                 {
@@ -679,14 +667,22 @@ void standard_to_double_block_layout_reallocation(
                     sdr_vec_addit = &sdr_main_addit;
                     main_parameters = &main_data;
                     addit_parameters = &main_data_addit;
-                    transpose_info = realloc_info.corner_transpose_info;
+                    transpose_info = realloc_info.main_transpose_info;
                 }
             }
 
-            // Pointer on first element of big block which is being reallocated
+            const int b1 = main_parameters->getDataRef().M_ROWS;
+            const int b2 = main_parameters->getDataRef().M_COLS;
+            const int db1 = main_parameters->getDataRef().B_ROWS;
+
+            // Size of dblock_row-stripe inside big block.
+            const int loc_stripe_size = db1 * b2;
+            // Pointer on first element of big block which is being reallocated.
             double* stripe_data_ptr = data_ptr +
-                ib * nlevel_data.STRIPE_SIZE +
-                jb * b1 * nlevel_data.B_COLS;
+                ib * uplevel_data.STRIPE_SIZE +
+                jb * (is_bottom_incomplete_stripe ?
+                    uplevel_data.DIF_ROWS_BLOCK_SIZE :
+                    uplevel_data.BLOCK_SIZE);
 
             if (transpose_option)
             {
@@ -696,18 +692,11 @@ void standard_to_double_block_layout_reallocation(
                 // Else, there is square transposition.
                 if (transpose_info == nullptr)
                 {
-                    transpose_square(stripe_data_ptr, b1);
+                    transpose_square(stripe_data_ptr, b2);
                 }
-                else    
+                else
                 {
-                    if (transpose_info->isTrivial())
-                    {
-                        transpose_square(stripe_data_ptr, b1);
-                    }
-                    else
-                    {
-                        standard_to_block_layout_reallocation(stripe_data_ptr, *transpose_info);
-                    }
+                    standard_to_block_layout_reallocation(stripe_data_ptr, *transpose_info);
                 }
             }
 
@@ -754,7 +743,8 @@ double* block_to_standard_layout_reallocation(double* data_ptr,
 
 double* double_block_to_standard_layout_reallocation(
                             double* data_ptr,
-                            const DoubleBlockReallocationInfo& realloc_info)
+                            const DoubleBlockReallocationInfo& realloc_info,
+                            bool transpose_option = false)
 {
     const BlockReallocationInfo* block_realloc_info = realloc_info.upper_level_realloc_info;
     const TaskData& block_realloc_params = block_realloc_info->main_data.getDataRef();
@@ -767,9 +757,10 @@ double* double_block_to_standard_layout_reallocation(
 
     // Reallocates each big block with inverse block reallocation algorythm
     const BlockReallocationInfo* local_realloc_info = nullptr;
+    const BlockReallocationInfo* transpose_info = nullptr;
     for (int ib = 0; ib < NB1; ++ib)
     {
-        const int row_shift = ib*B1*N2;
+        const int row_shift = ib * block_realloc_params.STRIPE_SIZE;
         const int rb1 = min(B1, N1 - ib*B1);
         for (int jb = 0; jb < NB2; ++jb)
         {
@@ -779,18 +770,44 @@ double* double_block_to_standard_layout_reallocation(
             if (rb1 == B1)
             {
                 if (rb2 == B2)
+                {
                     local_realloc_info = realloc_info.main_realloc_info;
+                    transpose_info = realloc_info.main_transpose_info;
+                }
                 else
+                {
                     local_realloc_info = realloc_info.right_realloc_info;
+                    transpose_info = realloc_info.right_transpose_info;
+                }
             }
             else
             {
                 if (rb2 == B2)
+                {
                     local_realloc_info = realloc_info.bottom_realloc_info;
+                    transpose_info = realloc_info.bottom_transpose_info;
+                }
                 else
+                {
                     local_realloc_info = realloc_info.corner_realloc_info;
+                    transpose_info = realloc_info.corner_transpose_info;
+                }
             }
+
             block_to_standard_layout_reallocation(block_begin, *local_realloc_info);
+
+            if (transpose_option)
+            {
+                if (transpose_info == nullptr)
+                {
+                    transpose_square(block_begin, rb2);
+                }
+                else
+                {
+                    standard_to_block_layout_reallocation(
+                        block_begin, *transpose_info);
+                }
+            }
         }
     }
     // Reallocates whole matrix after each block reallocation
@@ -979,16 +996,16 @@ void standard_to_transposed_double_block_layout_reallocation(
         main_realloc_info = computeCyclesDistribution(B2, B1, D2, D1);
     }
     const BlockReallocationInfo* right_realloc_info =
-        LayoutDataDispatcher::find(B2, rb1, D2, rd1);
+        LayoutDataDispatcher::find(rb2, B1, rd2, D1);
     if (right_realloc_info == nullptr)
     {
-        right_realloc_info = computeCyclesDistribution(B2, rb1, D2, rd1);
+        right_realloc_info = computeCyclesDistribution(rb2, B1, rd2, D1);
     }
     const BlockReallocationInfo* bottom_realloc_info =
-        LayoutDataDispatcher::find(rb2, B1, rd2, D1);
+        LayoutDataDispatcher::find(B2, rb1, D2, rd1);
     if (bottom_realloc_info == nullptr)
     {
-        bottom_realloc_info = computeCyclesDistribution(rb2, B1, rd2, D1);
+        bottom_realloc_info = computeCyclesDistribution(B2, rb1, D2, rd1);
     }
     const BlockReallocationInfo* corner_realloc_info =
         LayoutDataDispatcher::find(rb2, rb1, rd2, rd1);
@@ -998,28 +1015,28 @@ void standard_to_transposed_double_block_layout_reallocation(
     }
     // Searching reallocation data for transposition.
     const BlockReallocationInfo* main_transpose_info =
-        LayoutDataDispatcher::find(B1, B2, B1, 1);
-    if (main_transpose_info == nullptr)
+        (B2 == B1) ? nullptr : LayoutDataDispatcher::find(B2, B1, B2, 1);
+    if ((main_transpose_info == nullptr) && (B2 != B1))
     {
-        main_transpose_info = computeCyclesDistribution(B1, B2, B1, 1);
+        main_transpose_info = computeCyclesDistribution(B2, B1, B2, 1);
     }
     const BlockReallocationInfo* right_transpose_info =
-        LayoutDataDispatcher::find(B1, rb2, B1, 1);
-    if (right_transpose_info == nullptr)
+        (rb2 == B1) ? nullptr : LayoutDataDispatcher::find(rb2, B1, rb2, 1);
+    if ((right_transpose_info == nullptr) && (rb2 != B1))
     {
-        right_transpose_info = computeCyclesDistribution(B1, rb2, B1, 1);
+        right_transpose_info = computeCyclesDistribution(rb2, B1, rb2, 1);
     }
     const BlockReallocationInfo* bottom_transpose_info =
-        LayoutDataDispatcher::find(rb1, B2, rb1, 1);
-    if (bottom_transpose_info == nullptr)
+        (B2 == rb1) ? nullptr : LayoutDataDispatcher::find(B2, rb1, B2, 1);
+    if ((bottom_transpose_info == nullptr) && (B2 != rb1))
     {
-        bottom_transpose_info = computeCyclesDistribution(rb1, B2, rb1, 1);
+        bottom_transpose_info = computeCyclesDistribution(B2, rb1, B2, 1);
     }
     const BlockReallocationInfo* corner_transpose_info =
-        LayoutDataDispatcher::find(rb1, rb2, rb1, 1);
-    if (corner_transpose_info == nullptr)
+        (rb2 == rb1) ? nullptr : LayoutDataDispatcher::find(rb2, rb1, rb2, 1);
+    if ((corner_transpose_info == nullptr) && (rb2 != rb1))
     {
-        corner_transpose_info = computeCyclesDistribution(rb1, rb2, rb1, 1);
+        corner_transpose_info = computeCyclesDistribution(rb2, rb1, rb2, 1);
     }
 
     DoubleBlockReallocationInfo new_realloc_info;
@@ -1047,7 +1064,7 @@ double* transposed_double_block_to_standard_layout_reallocation(
     const int rd1 = min(D1, rb1);
     const int rd2 = min(D2, rb2);
 
-    // Searching reallocation data for each case in cache
+    // Searching reallocation data for each case in cache.
     const BlockReallocationInfo* upper_level_realloc_info =
         LayoutDataDispatcher::find(N1, N2, B1, B2);
     if (upper_level_realloc_info == nullptr)
@@ -1055,28 +1072,53 @@ double* transposed_double_block_to_standard_layout_reallocation(
         upper_level_realloc_info = computeCyclesDistribution(N1, N2, B1, B2);
     }
     const BlockReallocationInfo* main_realloc_info =
-        LayoutDataDispatcher::find(B1, B2, D1, D2);
+        LayoutDataDispatcher::find(B2, B1, D2, D1);
     if (main_realloc_info == nullptr)
     {
-        main_realloc_info = computeCyclesDistribution(B1, B2, D1, D2);
+        main_realloc_info = computeCyclesDistribution(B2, B1, D2, D1);
     }
     const BlockReallocationInfo* right_realloc_info =
-        LayoutDataDispatcher::find(B1, rb2, D1, rd2);
+        LayoutDataDispatcher::find(rb2, B1, rd2, D1);
     if (right_realloc_info == nullptr)
     {
-        right_realloc_info = computeCyclesDistribution(B1, rb2, D1, rd2);
+        right_realloc_info = computeCyclesDistribution(rb2, B1, rd2, D1);
     }
     const BlockReallocationInfo* bottom_realloc_info =
-        LayoutDataDispatcher::find(rb1, B2, rd1, D2);
+        LayoutDataDispatcher::find(B2, rb1, D2, rd1);
     if (bottom_realloc_info == nullptr)
     {
-        bottom_realloc_info = computeCyclesDistribution(rb1, B2, rd1, D2);
+        bottom_realloc_info = computeCyclesDistribution(B2, rb1, D2, rd1);
     }
     const BlockReallocationInfo* corner_realloc_info =
-        LayoutDataDispatcher::find(rb1, rb2, rd1, rd2);
+        LayoutDataDispatcher::find(rb2, rb1, rd2, rd1);
     if (corner_realloc_info == nullptr)
     {
-        corner_realloc_info = computeCyclesDistribution(rb1, rb2, rd1, rd2);
+        corner_realloc_info = computeCyclesDistribution(rb2, rb1, rd2, rd1);
+    }
+    // Searching reallocation data for transposition.
+    const BlockReallocationInfo* main_transpose_info =
+        (B1 == B2) ? nullptr : LayoutDataDispatcher::find(B1, B2, B1, 1);
+    if ((main_transpose_info == nullptr) && (B1 != B2))
+    {
+        main_transpose_info = computeCyclesDistribution(B1, B2, B1, 1);
+    }
+    const BlockReallocationInfo* right_transpose_info =
+        (B1 == rb2) ? nullptr : LayoutDataDispatcher::find(B1, rb2, B1, 1);
+    if ((right_transpose_info == nullptr) && (B1 != rb2))
+    {
+        right_transpose_info = computeCyclesDistribution(B1, rb2, B1, 1);
+    }
+    const BlockReallocationInfo* bottom_transpose_info =
+        (rb1 == B2) ? nullptr : LayoutDataDispatcher::find(rb1, B2, rb1, 1);
+    if ((bottom_transpose_info == nullptr) && (rb1 != B2))
+    {
+        bottom_transpose_info = computeCyclesDistribution(rb1, B2, rb1, 1);
+    }
+    const BlockReallocationInfo* corner_transpose_info =
+        (rb1 == rb2) ? nullptr : LayoutDataDispatcher::find(rb1, rb2, rb1, 1);
+    if ((corner_transpose_info == nullptr) && (rb1 != rb2))
+    {
+        corner_transpose_info = computeCyclesDistribution(rb1, rb2, rb1, 1);
     }
 
     DoubleBlockReallocationInfo new_realloc_info;
@@ -1085,9 +1127,13 @@ double* transposed_double_block_to_standard_layout_reallocation(
     new_realloc_info.right_realloc_info = right_realloc_info;
     new_realloc_info.bottom_realloc_info = bottom_realloc_info;
     new_realloc_info.corner_realloc_info = corner_realloc_info;
+    new_realloc_info.main_transpose_info = main_transpose_info;
+    new_realloc_info.right_transpose_info = right_transpose_info;
+    new_realloc_info.bottom_transpose_info = bottom_transpose_info;
+    new_realloc_info.corner_transpose_info = corner_transpose_info;
 
     // Inverse reallocation
-    double_block_to_standard_layout_reallocation(data_ptr, new_realloc_info);
+    double_block_to_standard_layout_reallocation(data_ptr, new_realloc_info, true);
 
     return data_ptr;
 }

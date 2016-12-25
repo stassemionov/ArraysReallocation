@@ -1,8 +1,6 @@
 ﻿#ifndef _TASKDATA_H_
 #define _TASKDATA_H_
 
-#include <cstdlib>
-#include <cmath>
 #include <vector>
 #include <algorithm>
 
@@ -31,7 +29,8 @@ struct TaskData
     int MAIN_COLS;       // number of columns in matrix except truncated blocks
     int STRIPE_SIZE;     // number of elements in block-stripe
     int BLOCK_SIZE;      // number of elements in main block
-    int DIF_BLOCK_SIZE;  // number of elements in right-truncated block
+    int DIF_ROWS_BLOCK_SIZE;  // number of elements in bottom-truncated block
+    int DIF_COLS_BLOCK_SIZE;  // number of elements in right-truncated block
 };
 
 // Gives required interface over
@@ -93,7 +92,7 @@ public:
         const int block_number = index / m_data.BLOCK_SIZE;
         const int local_shift = index % m_data.BLOCK_SIZE;
         const int cur_block_width =
-            (m_data.STRIPE_SIZE - index - m_data.DIF_BLOCK_SIZE < 0) ?
+            (m_data.STRIPE_SIZE - index - m_data.DIF_COLS_BLOCK_SIZE < 0) ?
             m_data.DIF_COLS : m_data.B_COLS;
 
         // смещение строками (от строки в блоке) +
