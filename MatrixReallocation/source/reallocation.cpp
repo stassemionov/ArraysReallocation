@@ -3,6 +3,12 @@
 
 #include <cstring>
 #include <algorithm>
+#include <omp.h>
+
+#include <ctime>
+#include <iostream>
+using std::cout;
+using std::endl;
 
 using std::sort;
 using std::swap;
@@ -33,7 +39,8 @@ public:
     {
         for (size_t i = 0; i < cache_data.size(); ++i)
         {
-            const_cast<BlockReallocationInfo*>(cache_data[i])->~BlockReallocationInfo();
+           // const_cast<BlockReallocationInfo*>(cache_data[i])->~BlockReallocationInfo();
+            delete cache_data[i];
         }
         cache_data.clear();
     }
@@ -60,7 +67,7 @@ public:
         const int B1, const int B2)
     {
         // Value for trivial layout
-        if ((N2 == 0) || (B2 == 0) || (N1 == 0) || (B1 == 0))
+        if ((N2 == 0) || (B2 == 0) || (N1 == 0) || (B1 == 0) || (N2 == B2))
         {
             return &trivial_layout_info;
         }
@@ -83,7 +90,6 @@ public:
                 }
             }
         }
-
         return nullptr;
     }
 };
@@ -466,6 +472,10 @@ const BlockReallocationInfo* computeCyclesDistribution(
     return new_realloc_info;
 }
 
+// Reallocates given block stripe of matrix
+// to layout specified by TaskClass parameter.
+// Cycles to follow are specified by given sdr-vector.
+// Direction of cycles passing is specified by 'inverse' flag.
 void reallocate_stripe(double* stripe_data,
                        const TaskClass& task_info,
                        const vector<int>& sdr_vec,
@@ -538,17 +548,7 @@ void reallocate_stripe(double* stripe_data,
 }
 
 // Transposes square N x N matrix.
-void transpose_square(double* data_ptr, const int N)
-{
-    for (int i = 0; i < N; ++i)
-    {
-        double* i_row = data_ptr + i*N;
-        for (int j = 0; j < i; ++j)
-        {
-            swap(i_row[j], data_ptr[j*N + i]);
-        }
-    }
-}
+double* transpose_square(double* data_ptr, const int N);
 
 void standard_to_block_layout_reallocation(
     double* data_ptr,
@@ -559,22 +559,24 @@ void standard_to_block_layout_reallocation(
     const TaskData& main_task_params = main_task_data.getDataRef();
     const vector<int>& sdr_vec_main  = realloc_info.sdr_main;
     const vector<int>& sdr_vec_addit = realloc_info.sdr_addit;
-    double* stripe_data_ptr = data_ptr;
 
-    if (sdr_vec_main.empty() || (stripe_data_ptr == nullptr) ||
+    if (sdr_vec_main.empty() || (data_ptr == nullptr) ||
         (main_task_params.B_ROWS == 0) || (main_task_params.B_COLS == 0))
     {
         return;
     }
-    
+
     const int it_count = main_task_params.M_ROWS / main_task_params.B_ROWS;
-    // Every iteration corresponds to the separate stripe
+    // Every iteration corresponds to the separate stripe.
+    #pragma omp parallel for shared(main_task_data, sdr_vec_main) schedule(dynamic, 1)
     for (int it = 0; it < it_count; ++it)
     {
-        reallocate_stripe(stripe_data_ptr, main_task_data, sdr_vec_main);
-        stripe_data_ptr += main_task_params.STRIPE_SIZE;
+        reallocate_stripe(data_ptr + it * main_task_params.STRIPE_SIZE,
+                          main_task_data,
+                          sdr_vec_main);
     }
-    reallocate_stripe(stripe_data_ptr, subtask_data, sdr_vec_addit);
+    reallocate_stripe(data_ptr + it_count * main_task_params.STRIPE_SIZE,
+                      subtask_data, sdr_vec_addit);
 }
 
 void standard_to_double_block_layout_reallocation(
@@ -610,6 +612,7 @@ void standard_to_double_block_layout_reallocation(
     const TaskClass& corner_data_addit = realloc_info.corner_realloc_info->main_data_addit;
 
     // Reallocation ...
+    #pragma omp parallel for schedule(dynamic, 1)
     for (int ib = 0; ib < uplevel_data.M_BLOCK_ROWS; ++ib)
     {
         const bool is_bottom_incomplete_stripe = (uplevel_data.DIF_ROWS != 0) &&
@@ -697,7 +700,9 @@ void standard_to_double_block_layout_reallocation(
                 }
                 else
                 {
-                    standard_to_block_layout_reallocation(stripe_data_ptr, *transpose_info);
+                    reallocate_stripe(stripe_data_ptr,
+                        transpose_info->main_data,
+                        transpose_info->sdr_main);
                 }
             }
 
@@ -726,19 +731,20 @@ double* block_to_standard_layout_reallocation(double* data_ptr,
     const vector<int>& sdr_vec_last_stripe = realloc_info.sdr_addit;
     
     const TaskData& data = main_task_data.getDataRef();
-    double* stripe_data_ptr = data_ptr;
+    const int it_count = data.M_ROWS / data.B_ROWS;
     // Every iteration corresponds to the separate stripe
-    for (int it = 0; it < data.M_ROWS / data.B_ROWS; ++it)
+    #pragma omp parallel for shared(main_task_data, sdr_vec) schedule(dynamic, 1)
+    for (int it = 0; it < it_count; ++it)
     {
-        reallocate_stripe(stripe_data_ptr, main_task_data, sdr_vec, true);
-        stripe_data_ptr += data.STRIPE_SIZE;
+        reallocate_stripe(data_ptr + it * data.STRIPE_SIZE,
+                          main_task_data,
+                          sdr_vec,
+                          true);
     }
-
-    reallocate_stripe(stripe_data_ptr,
+    reallocate_stripe(data_ptr + it_count * data.STRIPE_SIZE,
                       addit_task_data,
                       sdr_vec_last_stripe,
                       true);
-
     return data_ptr;
 }
 
@@ -759,6 +765,7 @@ double* double_block_to_standard_layout_reallocation(
     // Reallocates each big block with inverse block reallocation algorythm
     const BlockReallocationInfo* local_realloc_info = nullptr;
     const BlockReallocationInfo* transpose_info = nullptr;
+    #pragma omp parallel for schedule(dynamic, 1)
     for (int ib = 0; ib < NB1; ++ib)
     {
         const int row_shift = ib * block_realloc_params.STRIPE_SIZE;
@@ -805,14 +812,279 @@ double* double_block_to_standard_layout_reallocation(
                 }
                 else
                 {
-                    standard_to_block_layout_reallocation(
-                        block_begin, *transpose_info);
+                    reallocate_stripe(block_begin,
+                                      transpose_info->main_data,
+                                      transpose_info->sdr_main);
                 }
             }
         }
     }
     // Reallocates whole matrix after each block reallocation
     block_to_standard_layout_reallocation(data_ptr, *block_realloc_info);
+    return data_ptr;
+}
+
+double* transpose_square(double* data_ptr, const int N)
+{
+    for (int i = 0; i < N; ++i)
+    {
+        double* i_row = data_ptr + i*N;
+        for (int j = 0; j < i; ++j)
+        {
+            swap(i_row[j], data_ptr[j*N + i]);
+        }
+    }
+    return data_ptr;
+}
+
+// Transpose each block in matrix with block layout,
+// specified by parameters N1, N2, B1, B2.
+double* transpose_each_block(double* data_ptr,
+    const int N1, const int N2,
+    const int B1, const int B2,
+    const bool inverse = false)
+{
+    const int rb1 = N1 % B1;
+    const int rb2 = N2 % B2;
+    // Searching reallocation data for transposition.
+    const BlockReallocationInfo* main_transpose_info =
+        (B1 == B2) ? nullptr :
+        (inverse ? LayoutDataDispatcher::find(B2, B1, B2, 1) :
+                   LayoutDataDispatcher::find(B1, B2, B1, 1));
+    if ((main_transpose_info == nullptr) && (B1 != B2))
+    {
+        main_transpose_info = inverse ?
+            computeCyclesDistribution(B2, B1, B2, 1) :
+            computeCyclesDistribution(B1, B2, B1, 1);
+    }
+    const BlockReallocationInfo* right_transpose_info =
+        (B1 == rb2) ? nullptr :
+        (inverse ? LayoutDataDispatcher::find(rb2, B1, rb2, 1) :
+                   LayoutDataDispatcher::find(B1, rb2, B1, 1));
+    if ((right_transpose_info == nullptr) && (B1 != rb2))
+    {
+        right_transpose_info = inverse ?
+            computeCyclesDistribution(rb2, B1, rb2, 1) :
+            computeCyclesDistribution(B1, rb2, B1, 1);
+    }
+    const BlockReallocationInfo* bottom_transpose_info =
+        (rb1 == B2) ? nullptr :
+        (inverse ? LayoutDataDispatcher::find(B2, rb1, B2, 1) :
+                   LayoutDataDispatcher::find(rb1, B2, rb1, 1));
+    if ((bottom_transpose_info == nullptr) && (rb1 != B2))
+    {
+        bottom_transpose_info = inverse ?
+            computeCyclesDistribution(B2, rb1, B2, 1) :
+            computeCyclesDistribution(rb1, B2, rb1, 1);
+    }
+    const BlockReallocationInfo* corner_transpose_info =
+        (rb1 == rb2) ? nullptr :
+        (inverse ? LayoutDataDispatcher::find(rb2, rb1, rb2, 1) :
+                   LayoutDataDispatcher::find(rb1, rb2, rb1, 1));
+    if ((corner_transpose_info == nullptr) && (rb1 != rb2))
+    {
+        corner_transpose_info = inverse ?
+            computeCyclesDistribution(rb2, rb1, rb2, 1) :
+            computeCyclesDistribution(rb1, rb2, rb1, 1);
+    }
+
+    const int i_ub = (int)ceil((double)N1 / B1);
+    const int j_ub = (int)ceil((double)N2 / B2);
+    #pragma omp parallel for schedule(dynamic, 1)
+    for (int i = 0; i < i_ub; ++i)
+    {
+        const int s1 = min(B1, N1 - i*B1);
+        for (int j = 0; j < j_ub; ++j)
+        {
+            const int s2 = min(B2, N2 - j*B2);
+            double* block_beginning_ptr =
+                data_ptr + i*B1*N2 + j*s1*B2;
+
+            const BlockReallocationInfo* transpose_info = nullptr;
+            if (s1 != rb1)
+            {
+                transpose_info = (s2 != rb2) ?
+                    main_transpose_info : right_transpose_info;
+            }
+            else
+            {
+                transpose_info = (s2 != rb2) ?
+                    bottom_transpose_info : corner_transpose_info;
+            }
+
+            if (transpose_info == nullptr)
+            {
+                transpose_square(block_beginning_ptr, s1);
+            }
+            else
+            {
+                reallocate_stripe(block_beginning_ptr,
+                                  transpose_info->main_data,
+                                  transpose_info->sdr_main);
+            }
+        }
+    }
+    return data_ptr;
+}
+
+// Transpose each small-block-stripe in each big block in matrix
+// with block layout, specified by parameters N1, N2, B1, B2, D1.
+double* transpose_stripes_in_each_block(double* data_ptr,
+    const int N1, const int N2,
+    const int B1, const int B2,
+    const int D1,
+    const bool inverse = false)
+{
+    const int rb1 = N1 % B1;
+    const int rb2 = N2 % B2;
+    const int rd1 = B1 % D1;
+    const int rbd1 = (rb1 >= D1) ? rb1 % D1 : rb1;
+    // Searching reallocation data for transposition.
+    const BlockReallocationInfo* main_transpose_info =
+        (D1 == B2) ? nullptr :
+        (inverse ? LayoutDataDispatcher::find(B2, D1, B2, 1) :
+                   LayoutDataDispatcher::find(D1, B2, D1, 1));
+    if ((main_transpose_info == nullptr) && (D1 != B2))
+    {
+        main_transpose_info = inverse ?
+            computeCyclesDistribution(B2, D1, B2, 1) :
+            computeCyclesDistribution(D1, B2, D1, 1);
+    }
+    const BlockReallocationInfo* main_addit_transpose_info =
+        (rd1 == B2) ? nullptr :
+        (inverse ? LayoutDataDispatcher::find(B2, rd1, B2, 1) :
+                   LayoutDataDispatcher::find(rd1, B2, rd1, 1));
+    if ((main_addit_transpose_info == nullptr) && (rd1 != B2))
+    {
+        main_addit_transpose_info = inverse ?
+            computeCyclesDistribution(B2, rd1, B2, 1) :
+            computeCyclesDistribution(rd1, B2, rd1, 1);
+    }
+    const BlockReallocationInfo* right_transpose_info =
+        (D1 == rb2) ? nullptr :
+        (inverse ? LayoutDataDispatcher::find(rb2, D1, rb2, 1) :
+                   LayoutDataDispatcher::find(D1, rb2, D1, 1));
+    if ((right_transpose_info == nullptr) && (D1 != rb2))
+    {
+        right_transpose_info = inverse ?
+            computeCyclesDistribution(rb2, D1, rb2, 1) :
+            computeCyclesDistribution(D1, rb2, D1, 1);
+    }
+    const BlockReallocationInfo* right_addit_transpose_info =
+        (rd1 == rb2) ? nullptr :
+        (inverse ? LayoutDataDispatcher::find(rb2, rd1, rb2, 1) :
+                   LayoutDataDispatcher::find(rd1, rb2, rd1, 1));
+    if ((right_addit_transpose_info == nullptr) && (rd1 != rb2))
+    {
+        right_addit_transpose_info = inverse ?
+            computeCyclesDistribution(rb2, rd1, rb2, 1) :
+            computeCyclesDistribution(rd1, rb2, rd1, 1);
+    }
+    const BlockReallocationInfo* bottom_addit_transpose_info =
+        (rbd1 == B2) ? nullptr :
+        (inverse ? LayoutDataDispatcher::find(B2, rbd1, B2, 1) :
+                   LayoutDataDispatcher::find(rbd1, B2, rbd1, 1));
+    if ((bottom_addit_transpose_info == nullptr) && (rbd1 != B2))
+    {
+        bottom_addit_transpose_info = inverse ?
+            computeCyclesDistribution(B2, rbd1, B2, 1) :
+            computeCyclesDistribution(rbd1, B2, rbd1, 1);
+    }
+    const BlockReallocationInfo* corner_addit_transpose_info =
+        (rbd1 == rb2) ? nullptr :
+        (inverse ? LayoutDataDispatcher::find(rb2, rbd1, rb2, 1) :
+                   LayoutDataDispatcher::find(rbd1, rb2, rbd1, 1));
+    if ((corner_addit_transpose_info == nullptr) && (rbd1 != rb2))
+    {
+        corner_addit_transpose_info = inverse ?
+            computeCyclesDistribution(rb2, rbd1, rb2, 1) :
+            computeCyclesDistribution(rbd1, rb2, rbd1, 1);
+    }
+
+    const int i_ub = (int)ceil((double)N1 / B1);  // includes last block
+    const int j_ub = (int)ceil((double)N2 / B2);  // includes last block
+    #pragma omp parallel for schedule(dynamic, 1)
+    for (int i = 0; i < i_ub; ++i)
+    {
+        const int s1 = min(B1, N1 - i*B1);  // rows of current block
+        const int k_ub = s1 / D1;   // doesn't include last block
+        const int rd = s1 - k_ub * D1;  // size of last block
+        for (int j = 0; j < j_ub; ++j)
+        {
+            const int s2 = min(B2, N2 - j*B2);  // columns of current block
+            double* block_beginning_ptr =
+                data_ptr + i*B1*N2 + j*s1*B2;
+            // Selection of required reallocation data for transposition.
+            const BlockReallocationInfo* transpose_info = nullptr;
+            const BlockReallocationInfo* transpose_info_addit = nullptr;
+            if (s1 != rb1)
+            {
+                if (s2 != rb2)
+                {
+                    transpose_info = main_transpose_info;
+                    transpose_info_addit = main_addit_transpose_info;
+                }
+                else
+                {
+                    transpose_info = right_transpose_info;
+                    transpose_info_addit = right_addit_transpose_info;
+                }
+            }
+            else
+            {
+                if (s2 != rb2)
+                {
+                    transpose_info = main_transpose_info;
+                    transpose_info_addit = bottom_addit_transpose_info;
+                }
+                else
+                {
+                    transpose_info = right_transpose_info;
+                    transpose_info_addit = corner_addit_transpose_info;
+                }
+            }
+            // Transposition.
+            if (transpose_info == nullptr)  // square small blocks
+            {
+                for (int k = 0; k < k_ub; ++k)
+                {
+                    double* stripe_ptr = block_beginning_ptr + k*D1*s2;
+                    transpose_square(stripe_ptr, D1);
+                }
+                if (rd != 0)
+                    if (transpose_info_addit == nullptr)
+                    {
+                        transpose_square(block_beginning_ptr + k_ub*D1*s2, rd);
+                    }
+                    else
+                    {
+                        reallocate_stripe(block_beginning_ptr + k_ub*D1*s2,
+                            transpose_info_addit->main_data,
+                            transpose_info_addit->sdr_main);
+                    }
+            }
+            else    // nonsquare small blocks
+            {
+                for (int k = 0; k < k_ub; ++k)
+                {
+                    reallocate_stripe(block_beginning_ptr + k*D1*s2,
+                        transpose_info->main_data,
+                        transpose_info->sdr_main);
+                }
+                if (rd != 0)
+                if (transpose_info_addit == nullptr)
+                {
+                    transpose_square(block_beginning_ptr + k_ub*D1*s2, rd);
+                }
+                else
+                {
+                    reallocate_stripe(block_beginning_ptr + k_ub*D1*s2,
+                        transpose_info_addit->main_data,
+                        transpose_info_addit->sdr_main);
+                }
+            }
+        }
+    }
     return data_ptr;
 }
 
@@ -824,21 +1096,22 @@ void standard_to_block_layout_reallocation(
     const int N1, const int N2,
     const int B1, const int B2)
 {
-    // Searching for required reallocation data in cache
-    const BlockReallocationInfo* realloc_info = 
-        LayoutDataDispatcher::find(N1, N2, B1, B2);
-
-    // If data was found (paramenters was already used before this call),
-    // then produce reallocation without cycles searching
-    if (realloc_info != nullptr)
+    // If block has the same count of columns as matrix,
+    // then there is no need to produce some reallocations.
+    if (B2 == N2)
     {
-        standard_to_block_layout_reallocation(data_ptr, *realloc_info);
+        return;
     }
-    else    // else, use standard algorithm and push results to cache
+    // Searching for required reallocation data in cache.
+    const BlockReallocationInfo* realloc_info =
+        LayoutDataDispatcher::find(N1, N2, B1, B2);
+    // If data wasn't found (parameters wasn't used before this call),
+    // then produce cycles searching and push results to cache.
+    if (realloc_info == nullptr)
     {
         realloc_info = computeCyclesDistribution(N1, N2, B1, B2);
-        standard_to_block_layout_reallocation(data_ptr, *realloc_info);
     }
+    standard_to_block_layout_reallocation(data_ptr, *realloc_info);
 }
 
 double* block_to_standard_layout_reallocation(
@@ -846,20 +1119,22 @@ double* block_to_standard_layout_reallocation(
     const int N1, const int N2,
     const int B1, const int B2)
 {
+    // If block has the same count of columns as matrix,
+    // then there is no need to produce some reallocations.
+    if (B2 == N2)
+    {
+        return data_ptr;
+    }
     // Searching reallocation data in cache
     const BlockReallocationInfo* realloc_info =
         LayoutDataDispatcher::find(N1, N2, B1, B2);
-
-    // If data was found, then produce reallocation without cycles searching
-    if (realloc_info != nullptr)
-    {
-        block_to_standard_layout_reallocation(data_ptr, *realloc_info);
-    }
-    else    // else, produce cycles searching for this reallocation pattern
+    // If data wasn't found (parameters wasn't used before this call),
+    // then produce cycles searching and push results to cache.
+    if (realloc_info == nullptr)
     {
         realloc_info = computeCyclesDistribution(N1, N2, B1, B2);
-        block_to_standard_layout_reallocation(data_ptr, *realloc_info);
     }
+    block_to_standard_layout_reallocation(data_ptr, *realloc_info);
     return data_ptr;
 }
 
@@ -869,6 +1144,15 @@ void standard_to_double_block_layout_reallocation(
     const int B1, const int B2,
     const int D1, const int D2)
 {
+    // If size of main blocks equals to size of double blocks,
+    // then block reallocation is enough to produce,
+    // because layout of this case has trivial mapping of main block elements.
+    if (B2 == D2)
+    {
+        standard_to_block_layout_reallocation(data_ptr, N1, N2, B1, B2);
+        return;
+    }
+
     const int rb1 = N1 % B1;
     const int rb2 = N2 % B2;
     const int rd1 = min(D1, rb1);
@@ -922,6 +1206,15 @@ double* double_block_to_standard_layout_reallocation(
     const int B1, const int B2,
     const int D1, const int D2)
 {
+    // If size of main blocks equals to size of double blocks,
+    // then block reallocation is enough to produce,
+    // because layout of this case has trivial mapping of main block elements.
+    if (B2 == D2)
+    {
+        block_to_standard_layout_reallocation(data_ptr, N1, N2, B1, B2);
+        return data_ptr;
+    }
+
     const int rb1 = N1 % B1;
     const int rb2 = N2 % B2;
     const int rd1 = min(D1, rb1);
@@ -978,6 +1271,23 @@ void standard_to_transposed_double_block_layout_reallocation(
     const int B1, const int B2,
     const int D1, const int D2)
 {
+    // In this case, required layout can be obtained just with
+    // usual reallocation and transposition of each big block.
+    if (B1 == D1)
+    {
+        standard_to_block_layout_reallocation(data_ptr, N1, N2, B1, B2);
+        transpose_each_block(data_ptr, N1, N2, B1, B2);
+        return;
+    }
+    // In this case, required layout can be obtained just with
+    // usual reallocation and transposition of each small block.
+    if (B2 == D2)
+    {
+        standard_to_block_layout_reallocation(data_ptr, N1, N2, B1, B2);
+        transpose_stripes_in_each_block(data_ptr, N1, N2, B1, B2, D1);
+        return;
+    }
+
     const int rb1 = N1 % B1;
     const int rb2 = N2 % B2;
     const int rd1 = min(D1, rb1);
@@ -1060,6 +1370,23 @@ double* transposed_double_block_to_standard_layout_reallocation(
     const int B1, const int B2,
     const int D1, const int D2)
 {
+    // In this case, required layout can be obtained just with
+    // usual reallocation and transposition of each big block.
+    if (B1 == D1)
+    {
+        transpose_each_block(data_ptr, N1, N2, B1, B2, true);
+        block_to_standard_layout_reallocation(data_ptr, N1, N2, B1, B2);
+        return data_ptr;
+    }
+    // In this case, required layout can be obtained just with
+    // usual reallocation and transposition of each small block.
+    if (B2 == D2)
+    {
+        transpose_stripes_in_each_block(data_ptr, N1, N2, B1, B2, D1, true);
+        block_to_standard_layout_reallocation(data_ptr, N1, N2, B1, B2);
+        return data_ptr;
+    }
+
     const int rb1 = N1 % B1;
     const int rb2 = N2 % B2;
     const int rd1 = min(D1, rb1);
@@ -1096,30 +1423,55 @@ double* transposed_double_block_to_standard_layout_reallocation(
     {
         corner_realloc_info = computeCyclesDistribution(rb2, rb1, rd2, rd1);
     }
+//    // Searching reallocation data for transposition.
+//    const BlockReallocationInfo* main_transpose_info =
+//        (B1 == B2) ? nullptr : LayoutDataDispatcher::find(B1, B2, B1, 1);
+//    if ((main_transpose_info == nullptr) && (B1 != B2))
+//    {
+//        main_transpose_info = computeCyclesDistribution(B1, B2, B1, 1);
+//    }
+//    const BlockReallocationInfo* right_transpose_info =
+//        (B1 == rb2) ? nullptr : LayoutDataDispatcher::find(B1, rb2, B1, 1);
+//    if ((right_transpose_info == nullptr) && (B1 != rb2))
+//    {
+//        right_transpose_info = computeCyclesDistribution(B1, rb2, B1, 1);
+//    }
+//    const BlockReallocationInfo* bottom_transpose_info =
+//        (rb1 == B2) ? nullptr : LayoutDataDispatcher::find(rb1, B2, rb1, 1);
+//    if ((bottom_transpose_info == nullptr) && (rb1 != B2))
+//    {
+//        bottom_transpose_info = computeCyclesDistribution(rb1, B2, rb1, 1);
+//    }
+//    const BlockReallocationInfo* corner_transpose_info =
+//        (rb1 == rb2) ? nullptr : LayoutDataDispatcher::find(rb1, rb2, rb1, 1);
+//    if ((corner_transpose_info == nullptr) && (rb1 != rb2))
+//    {
+//        corner_transpose_info = computeCyclesDistribution(rb1, rb2, rb1, 1);
+//    }
     // Searching reallocation data for transposition.
     const BlockReallocationInfo* main_transpose_info =
-        (B1 == B2) ? nullptr : LayoutDataDispatcher::find(B1, B2, B1, 1);
-    if ((main_transpose_info == nullptr) && (B1 != B2))
+        (B2 == B1) ? nullptr : LayoutDataDispatcher::find(B2, B1, B2, 1);
+    if ((main_transpose_info == nullptr) && (B2 != B1))
     {
-        main_transpose_info = computeCyclesDistribution(B1, B2, B1, 1);
+        main_transpose_info = computeCyclesDistribution(B2, B1, B2, 1);
     }
     const BlockReallocationInfo* right_transpose_info =
-        (B1 == rb2) ? nullptr : LayoutDataDispatcher::find(B1, rb2, B1, 1);
-    if ((right_transpose_info == nullptr) && (B1 != rb2))
+        (rb2 == B1) ? nullptr : LayoutDataDispatcher::find(rb2, B1, rb2, 1);
+    if ((right_transpose_info == nullptr) && (rb2 != B1))
     {
-        right_transpose_info = computeCyclesDistribution(B1, rb2, B1, 1);
+        right_transpose_info = computeCyclesDistribution(rb2, B1, rb2, 1);
     }
     const BlockReallocationInfo* bottom_transpose_info =
-        (rb1 == B2) ? nullptr : LayoutDataDispatcher::find(rb1, B2, rb1, 1);
-    if ((bottom_transpose_info == nullptr) && (rb1 != B2))
+        (B2 == rb1) ? nullptr : LayoutDataDispatcher::find(B2, rb1, B2, 1);
+    if ((bottom_transpose_info == nullptr) && (B2 != rb1))
     {
-        bottom_transpose_info = computeCyclesDistribution(rb1, B2, rb1, 1);
+        bottom_transpose_info = computeCyclesDistribution(B2, rb1, B2, 1);
     }
     const BlockReallocationInfo* corner_transpose_info =
-        (rb1 == rb2) ? nullptr : LayoutDataDispatcher::find(rb1, rb2, rb1, 1);
-    if ((corner_transpose_info == nullptr) && (rb1 != rb2))
+        (rb2 == rb1) ? nullptr : LayoutDataDispatcher::find(rb2, rb1, rb2, 1);
+    if ((corner_transpose_info == nullptr) && (rb2 != rb1))
     {
-        corner_transpose_info = computeCyclesDistribution(rb1, rb2, rb1, 1);
+        corner_transpose_info = computeCyclesDistribution(rb2, rb1, rb2, 1);
     }
 
     DoubleBlockReallocationInfo new_realloc_info;

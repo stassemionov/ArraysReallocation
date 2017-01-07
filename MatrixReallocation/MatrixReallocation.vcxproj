@@ -142,7 +142,7 @@
       <SDLCheck>true</SDLCheck>
       <UseMSVC>false</UseMSVC>
       <EnableExpandedLineNumberInfo>false</EnableExpandedLineNumberInfo>
-      <OpenMP>None</OpenMP>
+      <OpenMP>GenerateParallelCode</OpenMP>
       <OptimizeForWindowsApplication>true</OptimizeForWindowsApplication>
       <Parallelization>false</Parallelization>
       <UseProcessorExtensions>None</UseProcessorExtensions>

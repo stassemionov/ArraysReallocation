@@ -31,7 +31,9 @@ int main()
 //    matrix_multiplication_tests(mult_params.first, mult_params.second, true);
 //    reallocation_test(realloc_params, false);
 
-    int N1 = 4014, N2 = 4033, B1 = 411, B2 = 422, D1 = 86, D2 = 85;
+    int N1 = 8192, N2 = N1,
+        B1 = 256, B2 = 8,
+        D1 = 64, D2 = 8;
     double* A = new double[N1 * N2], *B = new double[N1 * N2];
     for (int i = 0; i < N1 * N2; ++i)
     {
@@ -42,23 +44,37 @@ int main()
     double time_ = clock();
 
     InitDispatchSystem();
-    standard_to_transposed_double_block_layout_reallocation(A, N1, N2, B1, B2, D1, D2);
-    printf("\n AAAA \n");
-    transposed_double_block_to_standard_layout_reallocation(A, N1, N2, B1, B2, D1, D2);
-    printf("\n %lf %lf \n",
-        compare_arrays(A, B, N1 * N2),
-        (clock() - time_) / (1.0 * CLOCKS_PER_SEC));
-
-
-    time_ = clock();
-
-    standard_to_double_block_layout_reallocation(A, N1, N2, B1, B2, D1, D2);
-    printf("\n AAAA \n");
-    double_block_to_standard_layout_reallocation(A, N1, N2, B1, B2, D1, D2);
+    standard_to_transposed_double_block_layout_reallocation(A, N1, N1, 512, 256, 4, 256);
+    printf("\n %lf \n", (clock() - time_) / (1.0 * CLOCKS_PER_SEC));
+    standard_to_double_block_layout_reallocation(A, N1, N1, 256, 8, 256, 8);
+    standard_to_double_block_layout_reallocation(A, N1, N1, 4, 8, 4, 8);
+    printf("\n %lf \n", (clock() - time_) / (1.0 * CLOCKS_PER_SEC));
+    transposed_double_block_to_standard_layout_reallocation(A, N1, N1, 512, 256, 4, 256);
+    printf("\n %lf \n", (clock() - time_) / (1.0 * CLOCKS_PER_SEC)); 
+    double_block_to_standard_layout_reallocation(A, N1, N1, 256, 8, 256, 8);
+    double_block_to_standard_layout_reallocation(A, N1, N1, 4, 8, 4, 8);
     TurnOffDispatchSystem();
-    printf("\n %lf %lf \n",
-        compare_arrays(A, B, N1 * N2),
-        (clock() - time_) / (1.0 * CLOCKS_PER_SEC));
+    printf("\n %lf \n", (clock() - time_) / (1.0 * CLOCKS_PER_SEC));
+
+//    double time_ = clock();
+//
+//    InitDispatchSystem();
+//    standard_to_transposed_double_block_layout_reallocation(A, N1, N2, B1, B2, D1, D2);
+//    printf("\n AAAA %lf \n", (clock() - time_) / (1.0 * CLOCKS_PER_SEC));
+//    transposed_double_block_to_standard_layout_reallocation(A, N1, N2, B1, B2, D1, D2);
+//    printf("\n %lf %lf \n",
+//        compare_arrays(A, B, N1 * N2),
+//        (clock() - time_) / (1.0 * CLOCKS_PER_SEC));
+//
+//    time_ = clock();
+//
+//    standard_to_double_block_layout_reallocation(A, N1, N2, B1, B2, D1, D2);
+//    printf("\n AAAA \n");
+//    double_block_to_standard_layout_reallocation(A, N1, N2, B1, B2, D1, D2);
+//    TurnOffDispatchSystem();
+//    printf("\n %lf %lf \n",
+//        compare_arrays(A, B, N1 * N2),
+//        (clock() - time_) / (1.0 * CLOCKS_PER_SEC));
 
     delete[] A;
     delete[] B;
