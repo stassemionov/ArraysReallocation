@@ -1052,6 +1052,7 @@ double* transpose_stripes_in_each_block(double* data_ptr,
                     transpose_square(stripe_ptr, D1);
                 }
                 if (rd != 0)
+                {
                     if (transpose_info_addit == nullptr)
                     {
                         transpose_square(block_beginning_ptr + k_ub*D1*s2, rd);
@@ -1062,6 +1063,7 @@ double* transpose_stripes_in_each_block(double* data_ptr,
                             transpose_info_addit->main_data,
                             transpose_info_addit->sdr_main);
                     }
+               }
             }
             else    // nonsquare small blocks
             {
@@ -1072,15 +1074,17 @@ double* transpose_stripes_in_each_block(double* data_ptr,
                         transpose_info->sdr_main);
                 }
                 if (rd != 0)
-                if (transpose_info_addit == nullptr)
                 {
-                    transpose_square(block_beginning_ptr + k_ub*D1*s2, rd);
-                }
-                else
-                {
-                    reallocate_stripe(block_beginning_ptr + k_ub*D1*s2,
-                        transpose_info_addit->main_data,
-                        transpose_info_addit->sdr_main);
+                    if (transpose_info_addit == nullptr)
+                    {
+                        transpose_square(block_beginning_ptr + k_ub*D1*s2, rd);
+                    }
+                    else
+                    {
+                        reallocate_stripe(block_beginning_ptr + k_ub*D1*s2,
+                            transpose_info_addit->main_data,
+                            transpose_info_addit->sdr_main);
+                    }
                 }
             }
         }

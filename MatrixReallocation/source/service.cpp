@@ -28,11 +28,10 @@ double* generate(double* data_ptr,
 double* simple_fill(double* data_ptr,
     const int rows_count, const int cols_count)
 {
-    size_t i(0);
     const size_t length = static_cast<size_t>(rows_count * cols_count);
-    while (i < length)
+    for(size_t i = 0; i < length; ++i)
     {
-        data_ptr[i] = double(++i);
+        data_ptr[i] = i;
     }
     return data_ptr;
 }
