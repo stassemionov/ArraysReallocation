@@ -74,6 +74,7 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>true</LinkIncremental>
+    <IncludePath>$(ICIncludeDir);$(IncludePath);include;</IncludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <LinkIncremental>false</LinkIncremental>
@@ -166,6 +167,7 @@
   <ItemGroup>
     <ClCompile Include="source\floydalg.cpp" />
     <ClCompile Include="source\main.cpp" />
+    <ClCompile Include="source\mappingfuncs.cpp" />
     <ClCompile Include="source\multiplication.cpp" />
     <ClCompile Include="source\qralg.cpp" />
     <ClCompile Include="source\reallocation.cpp" />
@@ -175,6 +177,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\floydalg.h" />
+    <ClInclude Include="include\mappingfuncs.h" />
     <ClInclude Include="include\multiplication.h" />
     <ClInclude Include="include\qralg.h" />
     <ClInclude Include="include\reallocation.h" />

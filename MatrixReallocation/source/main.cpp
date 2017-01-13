@@ -2,9 +2,14 @@
 #include "service.h"
 #include "multiplication.h"
 #include "testing.h"
+#include "mappingfuncs.h"
 
-//#include <fstream>
+#include <iostream>
 #include <ctime>
+#include <omp.h>
+
+using std::cout;
+using std::endl;
 
 // Сделать!
 //  1) Найти нестандартные эффективные способы обхода циклов                             (СЛОЖНО)
@@ -29,52 +34,60 @@ int main()
 //    floyd_test(floyd_params, true);
 //    qralg_test(qr_params, true);
 //    matrix_multiplication_tests(mult_params.first, mult_params.second, true);
-//    reallocation_test(realloc_params, false);
+//    reallocation_test(realloc_params, true);
 
     int N1 = 8192, N2 = N1,
-        B1 = 256, B2 = 8,
-        D1 = 64, D2 = 8;
-    double* A = new double[N1 * N2], *B = new double[N1 * N2];
+        B1 = 512, B2 = 256,
+        D1 = 4, D2 = 256;
+    double
+        *A = new double[N1 * N2],
+        *B = new double[N1 * N2];
     for (int i = 0; i < N1 * N2; ++i)
     {
-        A[i] = i;
+        A[i] = i + 1;
     }
     memcpy(B, A, N1 * N2 * sizeof(double));
+    map_with_transposed_double_block_layout(B, A, N1, N2, B1, B2, D1, D2);
+//    print_to(cout, B, 1, N1*N2, 3);
 
-    double time_ = clock();
-
-    InitDispatchSystem();
-    standard_to_transposed_double_block_layout_reallocation(A, N1, N1, 512, 256, 4, 256);
-    printf("\n %lf \n", (clock() - time_) / (1.0 * CLOCKS_PER_SEC));
-    standard_to_double_block_layout_reallocation(A, N1, N1, 256, 8, 256, 8);
-    standard_to_double_block_layout_reallocation(A, N1, N1, 4, 8, 4, 8);
-    printf("\n %lf \n", (clock() - time_) / (1.0 * CLOCKS_PER_SEC));
-    transposed_double_block_to_standard_layout_reallocation(A, N1, N1, 512, 256, 4, 256);
-    printf("\n %lf \n", (clock() - time_) / (1.0 * CLOCKS_PER_SEC)); 
-    double_block_to_standard_layout_reallocation(A, N1, N1, 256, 8, 256, 8);
-    double_block_to_standard_layout_reallocation(A, N1, N1, 4, 8, 4, 8);
-    TurnOffDispatchSystem();
-    printf("\n %lf \n", (clock() - time_) / (1.0 * CLOCKS_PER_SEC));
-
-//    double time_ = clock();
+//    double time_ = omp_get_wtime();
 //
 //    InitDispatchSystem();
-//    standard_to_transposed_double_block_layout_reallocation(A, N1, N2, B1, B2, D1, D2);
-//    printf("\n AAAA %lf \n", (clock() - time_) / (1.0 * CLOCKS_PER_SEC));
+//    standard_to_transposed_double_block_layout_reallocation(A, N1, N1, 512, 256, 4, 256);
+//    printf("\n %lf \n", omp_get_wtime() - time_);
+//    standard_to_double_block_layout_reallocation(A, N1, N1, 256, 8, 256, 8);
+//    standard_to_double_block_layout_reallocation(A, N1, N1, 4, 8, 4, 8);
+//    printf("\n %lf \n", omp_get_wtime() - time_);
+//    transposed_double_block_to_standard_layout_reallocation(A, N1, N1, 512, 256, 4, 256);
+//    printf("\n %lf \n", omp_get_wtime() - time_);
+//    double_block_to_standard_layout_reallocation(A, N1, N1, 256, 8, 256, 8);
+//    double_block_to_standard_layout_reallocation(A, N1, N1, 4, 8, 4, 8);
+//    TurnOffDispatchSystem();
+//    printf("\n %lf \n", omp_get_wtime() - time_);
+    
+
+    double time_ = omp_get_wtime();
+
+    InitDispatchSystem();
+    standard_to_transposed_double_block_layout_reallocation(A, N1, N2, B1, B2, D1, D2);
+    time_ = omp_get_wtime() - time_;
+    cout << compare_arrays(A, B, N1 * N2) << " " << time_ << endl;
+
 //    transposed_double_block_to_standard_layout_reallocation(A, N1, N2, B1, B2, D1, D2);
-//    printf("\n %lf %lf \n",
+//    time_ = omp_get_wtime() - time_;
+//    printf("%lf %lf \n",
 //        compare_arrays(A, B, N1 * N2),
-//        (clock() - time_) / (1.0 * CLOCKS_PER_SEC));
-//
-//    time_ = clock();
+//        time_);
+    
+//    time_ = omp_get_wtime();
 //
 //    standard_to_double_block_layout_reallocation(A, N1, N2, B1, B2, D1, D2);
-//    printf("\n AAAA \n");
 //    double_block_to_standard_layout_reallocation(A, N1, N2, B1, B2, D1, D2);
 //    TurnOffDispatchSystem();
-//    printf("\n %lf %lf \n",
+//    time_ = omp_get_wtime() - time_;
+//    printf("%lf %lf \n",
 //        compare_arrays(A, B, N1 * N2),
-//        (clock() - time_) / (1.0 * CLOCKS_PER_SEC));
+//        time_);
 
     delete[] A;
     delete[] B;

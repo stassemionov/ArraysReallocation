@@ -22,15 +22,18 @@ struct TaskData
     int D_COLS;          // double block columns count
 
     // * Additional data (derived from main data)
-    int M_BLOCK_ROWS;    // number of block-stripes
-    int M_BLOCK_COLS;    // number of block-columns
-    int DIF_ROWS;        // number of rows in bottom-truncated block
-    int DIF_COLS;        // number of columns in right-truncated block
-    int MAIN_COLS;       // number of columns in matrix except truncated blocks
-    int STRIPE_SIZE;     // number of elements in block-stripe
-    int BLOCK_SIZE;      // number of elements in main block
+    int M_SIZE;         // total count of elements in matrix
+    int M_BLOCK_ROWS;   // number of block-stripes
+    int M_BLOCK_COLS;   // number of block-columns
+    int DIF_ROWS;       // number of rows in bottom-truncated block
+    int DIF_COLS;       // number of columns in right-truncated block
+    int MAIN_COLS;      // number of columns in matrix except truncated blocks
+    int STRIPE_SIZE;    // number of elements in block-stripe
+    int COLUMN_SIZE;    // number of elements in blcok-column
+    int BLOCK_SIZE;     // number of elements in main block
     int DIF_ROWS_BLOCK_SIZE;  // number of elements in bottom-truncated block
     int DIF_COLS_BLOCK_SIZE;  // number of elements in right-truncated block
+    int DIF_COLS_COLUMN_SIZE;
 };
 
 // Gives required interface over
@@ -104,6 +107,10 @@ public:
                local_shift % cur_block_width;
     }
 
+    int indexFunctionTransposed(const int index) const;
+
+    int indexFunctionTransposedInverse(const int index) const;
+
 private:
     TaskData m_data;
 };
@@ -117,6 +124,8 @@ struct BlockReallocationInfo
     // Parameters of reallocation
     TaskClass main_data;
     TaskClass main_data_addit;
+
+    bool transposed = false;
 
     ~BlockReallocationInfo() {}
     
@@ -133,12 +142,6 @@ struct DoubleBlockReallocationInfo
     const BlockReallocationInfo* right_realloc_info       = nullptr;
     const BlockReallocationInfo* bottom_realloc_info      = nullptr;
     const BlockReallocationInfo* corner_realloc_info      = nullptr;
-
-    // This part is unused when transposition option is disable.
-    const BlockReallocationInfo* main_transpose_info   = nullptr;
-    const BlockReallocationInfo* right_transpose_info  = nullptr;
-    const BlockReallocationInfo* bottom_transpose_info = nullptr;
-    const BlockReallocationInfo* corner_transpose_info = nullptr;
 };
 
 #endif  // _TASKDATA_H_
