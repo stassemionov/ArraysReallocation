@@ -5,6 +5,8 @@
 #include <algorithm>
 #include <omp.h>
 
+#include "immintrin.h"
+
 #include <ctime>
 #include <iostream>
 using std::cout;
@@ -477,6 +479,51 @@ const BlockReallocationInfo* computeCyclesDistribution(
     return new_realloc_info;
 }
 
+inline void copyAVX(double* dst_ptr, const double* src_ptr, const int length)
+{
+    int main_part = length >> 2;    // length / 4
+    for (int i = 0; i < main_part; ++i)
+    {
+        const int shift = i << 2;   // 4 * i
+        __m256d data = _mm256_set_pd(
+            src_ptr[shift + 3],
+            src_ptr[shift + 2],
+            src_ptr[shift + 1],
+            src_ptr[shift]);
+    //    __m256d data = _mm256_loadu_pd(src_ptr + shift);
+        _mm256_storeu_pd(dst_ptr + shift, data);
+    }
+    const int rest = length - ((length >> 2) << 2);
+    if (rest != 0)
+    {
+        memcpy(dst_ptr + length - rest,
+               src_ptr + length - rest,
+               rest << 3);
+    }
+//    int main_part = length >> 3;    // length / 8
+//    for (int i = 0; i < main_part; ++i)
+//    {
+//        const int shift = i << 3;   // 8 * i
+//        __m512d data = _mm512_set_pd(
+//            src_ptr[shift + 7],
+//            src_ptr[shift + 6],
+//            src_ptr[shift + 5],
+//            src_ptr[shift + 4],
+//            src_ptr[shift + 3],
+//            src_ptr[shift + 2],
+//            src_ptr[shift + 1],
+//            src_ptr[shift] );
+//        _mm512_storeu_pd(dst_ptr + shift, data);
+//    }
+//    const int rest = length - ((length >> 3) << 3);
+//    if (rest != 0)
+//    {
+//        memcpy(dst_ptr + length - rest,
+//            src_ptr + length - rest,
+//            rest << 3);
+//    }
+}
+
 // Reallocates given block stripe of matrix
 // to layout specified by TaskClass parameter.
 // Cycles to follow are specified by given sdr-vector.
@@ -525,29 +572,45 @@ void reallocate_stripe(double* stripe_data,
             }
         }
 
-        memcpy(src_data_buffer, stripe_data + dst_index, width);
-        // Holds place, where we start this cycle
-        const int first_in_cycle = dst_index;
-        // Do until cycle beginning isn't reached
-        do
+        int w = width >> 3;
+        if (w != 1)
         {
-            // Calculating of index for destination of copying
-            dst_index = (task_info.*index_function)(dst_index);
-            // Pointer to place, that is destination of copying
-            double* dst_data_ptr = stripe_data + dst_index;
-
-            // Saving of data, which is locating at destination location now
-            memcpy(dst_data_buffer, dst_data_ptr, width);
-            // Copying of data from source location to destination location
-            memcpy(dst_data_ptr, src_data_buffer, width);
-            // Swapping of source and destination buffer pointes.
-            // Destination data, which was saved at this iteration,
-            // will be used as source data at next iteration.
-            swap(src_data_buffer, dst_data_buffer);
+            copyAVX(src_data_buffer, stripe_data + dst_index, w);
+            //        memcpy(src_data_buffer, stripe_data + dst_index, width);
+            // Holds place, where we start this cycle
+            const int first_in_cycle = dst_index;
+            // Do until cycle beginning isn't reached
+            do
+            {
+                // Calculating of index for destination of copying
+                dst_index = (task_info.*index_function)(dst_index);
+                // Pointer to place, that is destination of copying
+                double* dst_data_ptr = stripe_data + dst_index;
+                // Saving of data, which is locating at destination location now
+                copyAVX(dst_data_buffer, dst_data_ptr, w);
+                //            memcpy(dst_data_buffer, dst_data_ptr, width);
+                // Copying of data from source location to destination location
+                copyAVX(dst_data_ptr, src_data_buffer, w);
+                //            memcpy(dst_data_ptr, src_data_buffer, width);
+                // Swapping of source and destination buffer pointes.
+                // Destination data, which was saved at this iteration,
+                // will be used as source data at next iteration.
+                swap(src_data_buffer, dst_data_buffer);
+            }
+            while (dst_index != first_in_cycle);
         }
-        while (dst_index != first_in_cycle);
+        else
+        {
+            double buffer = stripe_data[dst_index];
+            const int first_in_cycle = dst_index;
+            do
+            {
+                dst_index = (task_info.*index_function)(dst_index);
+                swap(buffer, stripe_data[dst_index]);
+            }
+            while (dst_index != first_in_cycle);
+        }
     }
-
     free(buf_mem);
 }
 
@@ -686,7 +749,6 @@ double* transfer_between_standard_and_double_block_layouts(
     const int brows = uplevel_data.B_ROWS;
     const int bcols = uplevel_data.B_COLS;
 
-    double t = omp_get_wtime();
     // Secondly, every block must be reallocated locally
     // as well as whole matrix was reallocated just now.
     #pragma omp parallel for schedule(dynamic, 1)
@@ -721,8 +783,6 @@ double* transfer_between_standard_and_double_block_layouts(
                 block_beginning_ptr, *loc_realloc_info, direction);
         }
     }
-
-    cout << "Time : " << omp_get_wtime() - t << endl;
     // Reallocates whole matrix after each block reallocation
     return direction ? data_ptr :
         transfer_between_standard_and_block_layouts(
@@ -745,7 +805,7 @@ double* double_block_to_standard_layout_reallocation(
         data_ptr, realloc_info, false);
 }
 
-/*
+
 // Transpose each block in matrix with block layout,
 // specified by parameters N1, N2, B1, B2.
 double* transpose_each_block(double* data_ptr,
@@ -835,7 +895,6 @@ double* transpose_each_block(double* data_ptr,
     }
     return data_ptr;
 }
-*/
 
 // Transpose each small-block-stripe in each big block in matrix
 // with block layout, specified by parameters N1, N2, B1, B2, D1.
@@ -1104,40 +1163,36 @@ double* transfer_between_standard_and_transposed_double_block_layouts(
 {
     // In this case, required layout can be obtained just with
     // usual reallocation and transposition of each big block.
-//    if (B1 == D1)
-//    {
-//        if (direction)
-//        {
-//            standard_to_block_layout_reallocation(data_ptr, N1, N2, B1, B2);
-//            transpose_each_block(data_ptr, N1, N2, B1, B2);
-//        }
-//        else
-//        {
-//            transpose_each_block(data_ptr, N1, N2, B1, B2, true);
-//            block_to_standard_layout_reallocation(data_ptr, N1, N2, B1, B2);
-//        }
-//        return data_ptr;
-//    }
+    if (B1 == D1)
+    {
+        if (direction)
+        {
+            standard_to_block_layout_reallocation(data_ptr, N1, N2, B1, B2);
+            transpose_each_block(data_ptr, N1, N2, B1, B2);
+        }
+        else
+        {
+            transpose_each_block(data_ptr, N1, N2, B1, B2, true);
+            block_to_standard_layout_reallocation(data_ptr, N1, N2, B1, B2);
+        }
+        return data_ptr;
+    }
     // In this case, required layout can be obtained just with
     // usual reallocation and transposition of each small block.
-//    if (B2 == D2)
-//    {
-//        if (direction)
-//        {
-//            standard_to_block_layout_reallocation(data_ptr, N1, N2, B1, B2);
-//            double t = omp_get_wtime();
-//            transpose_stripes_in_each_block(data_ptr, N1, N2, B1, B2, D1);
-//            cout << "Time : " << omp_get_wtime() - t << endl;
-//        }
-//        else
-//        {
-//            double t = omp_get_wtime();
-//            transpose_stripes_in_each_block(data_ptr, N1, N2, B1, B2, D1, true);
-//            cout << "Time : " << omp_get_wtime() - t << endl;
-//            block_to_standard_layout_reallocation(data_ptr, N1, N2, B1, B2);
-//        }
-//        return data_ptr;
-//    }
+    if (B2 == D2)
+    {
+        if (direction)
+        {
+            standard_to_block_layout_reallocation(data_ptr, N1, N2, B1, B2);
+            transpose_stripes_in_each_block(data_ptr, N1, N2, B1, B2, D1);
+        }
+        else
+        {
+            transpose_stripes_in_each_block(data_ptr, N1, N2, B1, B2, D1, true);
+            block_to_standard_layout_reallocation(data_ptr, N1, N2, B1, B2);
+        }
+        return data_ptr;
+    }
 
     const int rb1 = N1 % B1;
     const int rb2 = N2 % B2;
@@ -1148,7 +1203,6 @@ double* transfer_between_standard_and_transposed_double_block_layouts(
     const bool is_right_transpose = (B1 == rb2) && (D1 == B1) && (rd2 == 1);
     const bool is_bottom_transpose = (rb1 == B2) && (rb1 == rd1) && (D2 == 1);
     const bool is_corner_transpose = (rb1 == rb2) && (rb1 == rd1) && (rd2 == 1);
-    double t = omp_get_wtime();
     // Searching reallocation data for each case in cache.
     const BlockReallocationInfo* upper_level_realloc_info =
         LayoutDataDispatcher::find(N1, N2, B1, B2);
@@ -1184,7 +1238,6 @@ double* transfer_between_standard_and_transposed_double_block_layouts(
     {
         corner_realloc_info = computeCyclesDistribution(rb1, rb2, rd1, rd2, true);
     }
-    cout << "Time1 : " << omp_get_wtime() - t << endl;
     DoubleBlockReallocationInfo new_realloc_info;
     new_realloc_info.upper_level_realloc_info = upper_level_realloc_info;
     new_realloc_info.main_realloc_info = main_realloc_info;

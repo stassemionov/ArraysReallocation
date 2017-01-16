@@ -60,7 +60,6 @@ double* map_with_transposed_double_block_layout(
                                  min(D1, diff1), min(D2, diff2) };
 
     double* buffer = (double*)calloc(B1 * B2, sizeof(double));
-
     for (int ib = 0; ib < task_info.getDataRef().M_BLOCK_ROWS; ++ib)
     {
         const int rb1 = min(B1, N1 - ib * B1);

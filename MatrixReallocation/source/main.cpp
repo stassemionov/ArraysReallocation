@@ -38,7 +38,7 @@ int main()
 
     int N1 = 8192, N2 = N1,
         B1 = 512, B2 = 256,
-        D1 = 4, D2 = 256;
+        D1 = 8, D2 = 256;
     double
         *A = new double[N1 * N2],
         *B = new double[N1 * N2];
@@ -46,7 +46,7 @@ int main()
     {
         A[i] = i + 1;
     }
-    memcpy(B, A, N1 * N2 * sizeof(double));
+//    memcpy(B, A, N1 * N2 * sizeof(double));
     map_with_transposed_double_block_layout(B, A, N1, N2, B1, B2, D1, D2);
 //    print_to(cout, B, 1, N1*N2, 3);
 
@@ -73,6 +73,7 @@ int main()
     time_ = omp_get_wtime() - time_;
     cout << compare_arrays(A, B, N1 * N2) << " " << time_ << endl;
 
+//    time_ = omp_get_wtime();
 //    transposed_double_block_to_standard_layout_reallocation(A, N1, N2, B1, B2, D1, D2);
 //    time_ = omp_get_wtime() - time_;
 //    printf("%lf %lf \n",

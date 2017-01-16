@@ -4,6 +4,8 @@
 #include <vector>
 #include <algorithm>
 
+#include "immintrin.h"
+
 using std::vector;
 using std::min;
 
@@ -84,6 +86,12 @@ public:
             cur_block_width * (index / m_data.M_COLS) +
             column % m_data.B_COLS;*/
      
+   //     __m128i op1 = _mm_set_epi32(0, column % m_data.B_COLS, cur_block_width,       m_data.B_ROWS);
+   //     __m128i op2 = _mm_set_epi32(0, m_data.B_ROWS - 1,      index / m_data.M_COLS, column);
+   //     __m128i data_mul = _mm_mullo_epi32(op1, op2);
+   // 
+   //     return data_mul.m128i_i32[0] + data_mul.m128i_i32[1] - data_mul.m128i_i32[2];
+
         // Optimized version.
         return m_data.B_ROWS * column +
             cur_block_width * (index / m_data.M_COLS) -

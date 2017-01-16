@@ -145,8 +145,14 @@ int TaskClass::indexFunctionTransposed(const int index) const
     const int col = index % m_data.M_COLS;
     const int brow = row / m_data.B_ROWS;
     const int bcol = col / m_data.B_COLS;
+
+ //   __m128i op1 = _mm_set_epi32(0, 0, m_data.B_COLS, m_data.B_ROWS);
+ //   __m128i op2 = _mm_set_epi32(0, 0, m_data.M_COLS - bcol * m_data.B_COLS,
+ //                                     m_data.M_ROWS - brow * m_data.B_ROWS);
+ //   __m128i data_min = _mm_min_epi32(op1, op2);
+
     const int cur_block_width = min(m_data.B_COLS, m_data.M_COLS - bcol * m_data.B_COLS);
-    const int cur_block_height = min(m_data.B_ROWS, m_data.M_ROWS - brow * m_data.B_ROWS);
+    const int cur_block_height =min(m_data.B_ROWS, m_data.M_ROWS - brow * m_data.B_ROWS);
     return bcol * m_data.COLUMN_SIZE +
         (row / m_data.B_ROWS) * (m_data.B_ROWS * cur_block_width) +
         (col % m_data.B_COLS) * cur_block_height +

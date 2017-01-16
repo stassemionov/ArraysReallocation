@@ -146,7 +146,7 @@
       <OpenMP>GenerateParallelCode</OpenMP>
       <OptimizeForWindowsApplication>true</OptimizeForWindowsApplication>
       <Parallelization>false</Parallelization>
-      <UseProcessorExtensions>None</UseProcessorExtensions>
+      <UseProcessorExtensions>AVX</UseProcessorExtensions>
       <Cpp0xSupport>true</Cpp0xSupport>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <FavorSizeOrSpeed>Neither</FavorSizeOrSpeed>
@@ -156,6 +156,7 @@
       <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
       <AdditionalOptions>-fast %(AdditionalOptions)</AdditionalOptions>
       <Optimization>Full</Optimization>
+      <GenerateAlternateCodePaths>AVX</GenerateAlternateCodePaths>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
