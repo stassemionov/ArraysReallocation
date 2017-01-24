@@ -90,7 +90,9 @@ public:
    //     __m128i op2 = _mm_set_epi32(0, m_data.B_ROWS - 1,      index / m_data.M_COLS, column);
    //     __m128i data_mul = _mm_mullo_epi32(op1, op2);
    // 
-   //     return data_mul.m128i_i32[0] + data_mul.m128i_i32[1] - data_mul.m128i_i32[2];
+   //     return _mm_extract_epi32(data_mul, 0) +
+   //            _mm_extract_epi32(data_mul, 1) -
+   //            _mm_extract_epi32(data_mul, 2);
 
         // Optimized version.
         return m_data.B_ROWS * column +

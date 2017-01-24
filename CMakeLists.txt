@@ -22,11 +22,7 @@ add_library(reallocation SHARED	${SOURCE_FILES}
 		   						${HEADER_FILES})
 
 target_compile_features(reallocation PUBLIC cxx_nullptr)
-if (CMAKE_COMPILER_IS_GNUCXX)
-    target_compile_options(reallocation PUBLIC -Wall -O3)
-elseif (MSVC)
-    target_compile_options(reallocation PUBLIC /W3 /Ox)
-endif()
+target_compile_options(reallocation PUBLIC -Wall -O3 -mavx -msse4.1)
 
 install(TARGETS reallocation
 		LIBRARY

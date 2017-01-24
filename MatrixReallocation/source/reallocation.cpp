@@ -115,6 +115,10 @@ vector<BlockReallocationInfo*> LayoutDataDispatcher::cache_data =
 BlockReallocationInfo LayoutDataDispatcher::trivial_layout_info =
                                     BlockReallocationInfo();
 
+#ifdef __cplusplus
+    extern "C" {
+#endif
+
 void InitDispatchSystem()
 {
     LayoutDataDispatcher::init();
@@ -125,6 +129,10 @@ void TurnOffDispatchSystem()
     LayoutDataDispatcher::trivial_layout_info.~BlockReallocationInfo();
     LayoutDataDispatcher::clear();
 }
+
+#ifdef __cplusplus
+    }
+#endif
 
 // *** LAYOUT DISPATCHER CLASS ***
 
@@ -479,7 +487,7 @@ const BlockReallocationInfo* computeCyclesDistribution(
     return new_realloc_info;
 }
 
-inline void copyAVX(double* dst_ptr, const double* src_ptr, const int length)
+void copyAVX(double* dst_ptr, const double* src_ptr, const int length)
 {
     int main_part = length >> 2;    // length / 4
     for (int i = 0; i < main_part; ++i)
@@ -1253,6 +1261,10 @@ double* transfer_between_standard_and_transposed_double_block_layouts(
 
 // * RELEASE VERSIONS * //
 
+#ifdef __cplusplus
+    extern "C" {
+#endif
+
 double* standard_to_block_layout_reallocation(
     double* data_ptr,
     const int N1, const int N2,
@@ -1322,3 +1334,8 @@ double* transposed_double_block_to_standard_layout_reallocation(
         N1, N2, B1, B2, D1, D2,
         false);
 }
+
+#ifdef __cplusplus
+    }
+#endif
+

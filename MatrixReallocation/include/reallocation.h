@@ -1,6 +1,10 @@
 ﻿#ifndef _REALLOCATION_H_
 #define _REALLOCATION_H_
 
+#ifdef __cplusplus
+    extern "C" {
+#endif
+
 // Must be called before first using of reallocation functions
 void InitDispatchSystem();
 
@@ -40,5 +44,9 @@ double* transposed_double_block_to_standard_layout_reallocation(
     const int N1, const int N2,
     const int B1, const int B2,
     const int D1, const int D2);
+
+#ifdef __cplusplus
+    }
+#endif
 
 #endif  // _REALLOCATION_H_
