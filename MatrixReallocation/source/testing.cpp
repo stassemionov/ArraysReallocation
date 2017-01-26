@@ -101,8 +101,10 @@ Blocks select_optimal_double_block_size_multiplication(const int N,
 
             time_ = clock();
             matrix_multiplication_double_block(generator,
-                                               left_copy, right_copy,
-                                               task_data, task_data);
+                left_copy, right_copy,
+                N, N, N,
+                block_size, block_size, block_size,
+                double_block_size, double_block_size, double_block_size);
             mul_time = (clock() - time_) / (1.0 * CLOCKS_PER_SEC);
             res_time = mul_time + realloc_time;
 
@@ -206,8 +208,10 @@ int select_optimal_block_size_multiplication(
         realloc_time = (clock() - time_) / (1.0 * CLOCKS_PER_SEC);
 
         time_ = clock();
-        matrix_multiplication_block(generator, left_copy, right_copy,
-                                    task_data, task_data);
+        matrix_multiplication_block(
+            generator, left_copy, right_copy,
+            N, N, N,
+            block_size, block_size, block_size);
         mul_time = (clock() - time_) / (1.0 * CLOCKS_PER_SEC);
         res_time = mul_time + realloc_time;        
 
@@ -310,7 +314,8 @@ void matrix_multiplication_tests(const TaskClass& params_left,
     time_ = clock();
     matrix_multiplication_tiled(
         gen_mat_t, left_mat, rgt_mat,
-        params_left, params_right);
+        N1, N2, N3,
+        B1, B2, B3);
     time_ = (clock() - time_) / (1.0 * CLOCKS_PER_SEC);
     fprintf(log_file, "[ %.3lf секунд ]\n", time_);
     if (console_info_output)
@@ -326,7 +331,9 @@ void matrix_multiplication_tests(const TaskClass& params_left,
     time_ = clock();
     matrix_multiplication_double_tiled(
         gen_mat_dt, left_mat, rgt_mat,
-        params_left, params_right);
+        N1, N2, N3,
+        B1, B2, B3,
+        D1, D2, D3);
     time_ = (clock() - time_) / (1.0 * CLOCKS_PER_SEC);
     fprintf(log_file, "[ %.3lf секунд ]\n", time_);
     if (console_info_output)
@@ -372,7 +379,8 @@ void matrix_multiplication_tests(const TaskClass& params_left,
     time_ = clock();
     matrix_multiplication_block(
         gen_mat_b, left_mat, rgt_mat,
-        params_left, params_right);
+        N1, N2, N3,
+        B1, B2, B3);
     time_ = (clock() - time_) / (1.0 * CLOCKS_PER_SEC);
     fprintf(log_file, "[ %.3lf секунд ]\n", time_);
     if (console_info_output)
@@ -438,7 +446,9 @@ void matrix_multiplication_tests(const TaskClass& params_left,
     time_ = clock();
     matrix_multiplication_double_block(
         gen_mat_db, left_mat, rgt_mat,
-        params_left, params_right);
+        N1, N2, N3,
+        B1, B2, B3,
+        D1, D2, D3);
     time_ = (clock() - time_) / (1.0 * CLOCKS_PER_SEC);
     fprintf(log_file, "[ %.3lf секунд ]\n", time_);
     if (console_info_output)
@@ -914,7 +924,7 @@ void qralg_test(const TaskClass& parameters,
         printf("  > QR-алгоритм с тайлингом (WY-разложение)...         ");
     }
     time_ = clock();
-    QR_WY_tiled(mat_t, parameters.getDataRef());
+    QR_WY_tiled(mat_t, N, B1, B2);
     time_ = (clock() - time_) / (1.0 * CLOCKS_PER_SEC);
     fprintf(log_file, "[ %.3lf секунд ]\n", time_);
     if (console_info_output)
@@ -928,7 +938,7 @@ void qralg_test(const TaskClass& parameters,
         printf("  > QR-алгоритм с двойным тайлингом (WY-разложение)... ");
     }
     time_ = clock();
-    QR_WY_double_tiled(mat_dt, parameters.getDataRef());
+    QR_WY_double_tiled(mat_dt, N, B1, B2, D1, D2);
     time_ = (clock() - time_) / (1.0 * CLOCKS_PER_SEC);
     fprintf(log_file, "[ %.3lf секунд ]\n", time_);
     if (console_info_output)
@@ -956,7 +966,7 @@ void qralg_test(const TaskClass& parameters,
         printf("  > Блочный QR-алгоритм (WY-разложение)...             ");
     }
     time_ = clock();
-    QR_WY_block(mat_b, parameters.getDataRef());
+    QR_WY_block(mat_b, N, B1, B2);
     time_ = (clock() - time_) / (1.0 * CLOCKS_PER_SEC);
     fprintf(log_file, "[ %.3lf секунд ]\n", time_);
     if (console_info_output)
@@ -1000,7 +1010,7 @@ void qralg_test(const TaskClass& parameters,
         printf("  > Двойной блочный QR-алгоритм (WY-разложение)...     ");
     }
     time_ = clock();
-    QR_WY_double_block(mat_db, parameters.getDataRef());
+    QR_WY_double_block(mat_db, N, B1, B2, D1, D2);
     time_ = (clock() - time_) / (1.0 * CLOCKS_PER_SEC);
     fprintf(log_file, "[ %.3lf секунд ]\n", time_);
     if (console_info_output)

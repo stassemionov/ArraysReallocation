@@ -57,39 +57,4 @@ TaskClass read_floyd_algorythm_parameters(
 TaskClass read_qr_parameters(
     const string& file_name = "../resource/parameter/qr_parameters.txt");
 
-// Copy part of source matrix with double block layout
-// to according part of destinating matrix with the same layout.
-// Matrix part is specified by left upper corner coordinates.
-void copy_minor_double_block(double* dst_ptr,
-    const double* src_ptr,
-    const TaskData& layout_data,
-    const int row_coord,
-    const int col_coord);
-
-// Fill part of source matrix with double block layout
-// by specifed value 'val'.
-// Matrix part is specified by left upper corner coordinates.
-void set_minor_double_block(double* dst_ptr,
-    const int val,
-    const TaskData& layout_data,
-    const int row_coord,
-    const int col_coord);
-
-// Copy part of source matrix with block layout
-// to according part of destinating matrix with the same layout.
-// Matrix part is specified by left upper corner coordinates.
-void copy_minor_block(double* dst_ptr,
-    const double* src_ptr,
-    const TaskData& layout_data,
-    const int row_coord,
-    const int col_coord);
-
-// Fill part of source matrix with block layout by specifed value 'val'.
-// Matrix part is specified by left upper corner coordinates.
-void set_minor_block(double* dst_ptr,
-    const int val,
-    const TaskData& layout_data,
-    const int row_coord,
-    const int col_coord);
-
 #endif  // _SERVICE_H_

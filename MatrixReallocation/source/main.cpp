@@ -28,14 +28,14 @@ int main()
 
 //    const TaskClass& floyd_params   = read_floyd_algorythm_parameters();
 //    const TaskClass& qr_params      = read_qr_parameters();
-//    const pair<TaskClass, TaskClass> mult_params = read_multiplication_parameters();
-//    const TaskClass& realloc_params = read_reallocation_test_parameters();
+    const pair<TaskClass, TaskClass> mult_params = read_multiplication_parameters();
+    const TaskClass& realloc_params = read_reallocation_test_parameters();
 
 //    floyd_test(floyd_params, true);
 //    qralg_test(qr_params, true);
-//    matrix_multiplication_tests(mult_params.first, mult_params.second, true);
-//    reallocation_test(realloc_params, true);
-
+    matrix_multiplication_tests(mult_params.first, mult_params.second, true);
+    reallocation_test(realloc_params, true);
+/*
     int N1 = 8192, N2 = N1,
         B1 = 512, B2 = 256,
         D1 = 8, D2 = 256;
@@ -92,4 +92,5 @@ int main()
 
     delete[] A;
     delete[] B;
+    */
 }

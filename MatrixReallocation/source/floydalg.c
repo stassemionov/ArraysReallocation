@@ -1,21 +1,27 @@
 #include "floydalg.h"
 
-#include <algorithm>
+#include <math.h>
 
-using std::min;
+#define max(a,b) ((a) > (b) ? (a) : (b))
+#define min(a,b) ((a) < (b) ? (a) : (b))
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 double* floyd_standard(double* data, const int N)
 {
     for (int k = 0; k < N; ++k)
     {
         const double* Ak = data + k * N;
+#pragma omp parallel for schedule(dynamic, 1)
         for (int i = 0; i < N; ++i)
         {
             double* Ai = data + i * N;
             const double Aik = Ai[k];
             for (int j = 0; j < N; ++j)
             {
-                Ai[j] = min(Ai[j], Aik + Ak[j]);
+                Ai[j] = fmin(Ai[j], Aik + Ak[j]);
             }
         }
     }
@@ -24,7 +30,7 @@ double* floyd_standard(double* data, const int N)
 
 double* floyd_tiled(double* data, const int N, const int B)
 {
-    const int factor = static_cast<int>(ceil(1.0 * N / B));
+    const int factor = (int) ceil(1.0 * N / B);
 
     // Шагаем по блокам (factor - их количество)
     for (int t = 0; t < factor; ++t)
@@ -42,7 +48,7 @@ double* floyd_tiled(double* data, const int N, const int B)
                 const double Aik = Ai[k];
                 for (int j = tmB; j < tB; ++j)
                 {
-                    Ai[j] = min(Ai[j], Aik + Ak[j]);
+                    Ai[j] = fmin(Ai[j], Aik + Ak[j]);
                 }
             }
         }
@@ -67,7 +73,7 @@ double* floyd_tiled(double* data, const int N, const int B)
                     double Aik = Ai[k];
                     for (int j = lb; j < ub; ++j)
                     {
-                        Ai[j] = min(Ai[j], Aik + Ak[j]);
+                        Ai[j] = fmin(Ai[j], Aik + Ak[j]);
                     }
                 }
             }
@@ -89,7 +95,7 @@ double* floyd_tiled(double* data, const int N, const int B)
                     const double Aik = Ai[k];
                     for (int j = tmB; j < tB; ++j)
                     {
-                        Ai[j] = min(Ai[j], Aik + Ak[j]);
+                        Ai[j] = fmin(Ai[j], Aik + Ak[j]);
                     }
                 }
             }
@@ -119,7 +125,7 @@ double* floyd_tiled(double* data, const int N, const int B)
                         const double Aik = Ai[k];
                         for (int j = lb2; j < ub2; ++j)
                         {
-                            Ai[j] = min(Ai[j], Aik + Ak[j]);
+                            Ai[j] = fmin(Ai[j], Aik + Ak[j]);
                         }
                     }
                 }
@@ -131,7 +137,7 @@ double* floyd_tiled(double* data, const int N, const int B)
 
 double* floyd_block(double* data, const int N, const int B)
 {
-    const int factor = static_cast<int>(ceil(1.0 * N / B));
+    const int factor = (int) ceil(1.0 * N / B);
 
     for (int t = 0; t < factor; ++t)
     {
@@ -151,7 +157,7 @@ double* floyd_block(double* data, const int N, const int B)
                 const double Aik = Ai[k];
                 for (int j = 0; j < CBsize; ++j)
                 {
-                    Ai[j] = min(Ai[j], Aik + CBk[j]);
+                    Ai[j] = fmin(Ai[j], Aik + CBk[j]);
                 }
             }
         }
@@ -178,7 +184,7 @@ double* floyd_block(double* data, const int N, const int B)
                     const double Aik = CB[i*CBsize + k];
                     for (int j = 0; j < ABwidth; ++j)
                     {
-                        Ai[j] = min(Ai[j], Aik + Ak[j]);
+                        Ai[j] = fmin(Ai[j], Aik + Ak[j]);
                     }
                 }
             }
@@ -205,7 +211,7 @@ double* floyd_block(double* data, const int N, const int B)
                     const double Aik = Ai[k];
                     for (int j = 0; j < CBsize; ++j)
                     {
-                        Ai[j] = min(Ai[j], Aik + CBk[j]);
+                        Ai[j] = fmin(Ai[j], Aik + CBk[j]);
                     }
                 }
             }
@@ -242,7 +248,7 @@ double* floyd_block(double* data, const int N, const int B)
                         const double Aik = b1_t_block[i*CBsize + k];
                         for (int j = 0; j < ABwidth; ++j)
                         {
-                            Ai[j] = min(Ai[j], Aik + t_b2_block_k_line[j]);
+                            Ai[j] = fmin(Ai[j], Aik + t_b2_block_k_line[j]);
                         }
                     }
                 }
@@ -251,3 +257,7 @@ double* floyd_block(double* data, const int N, const int B)
     }
     return data;
 }
+
+#ifdef __cplusplus
+    }
+#endif

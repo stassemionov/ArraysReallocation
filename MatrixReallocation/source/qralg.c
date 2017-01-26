@@ -1,32 +1,584 @@
 #include "qralg.h"
-#include "service.h"
 
-#include <algorithm>
+#include <stdlib.h>
+#include <string.h>
+#include <math.h>
 
-using std::min;
-using std::max;
-using std::swap;
-
-double* QR_WY_tiled(double* A, const TaskData& parameters)
+// Copy part of source matrix with double block layout
+// to according part of destinating matrix with the same layout.
+// Matrix part is specified by left upper corner coordinates.
+void copy_minor_double_block(double* dst_ptr,
+    const double* src_ptr,
+    const int N,
+    const int b1, const int b2,
+    const int db1, const int db2,
+    const int row_coord, const int col_coord)
 {
-    // Main parameters of task
-    const int N = parameters.M_ROWS;
-    const int b1 = parameters.B_ROWS;
-    const int b2 = parameters.B_COLS;
-    
+    if (row_coord >= N || col_coord >= N)
+    {
+        return;
+    }
+
+    // Big blocks counts in matrix
+    const int block_count_in_col = (int)ceil(1.0 * N / b1);
+    const int block_count_in_row = (int)ceil(1.0 * N / b2);
+    // Small blocks counts in big blocks
+    const int dblock_count_in_bcol = (int)ceil(1.0 * b1 / db1);
+    const int dblock_count_in_brow = (int)ceil(1.0 * b2 / db2);
+    const int dblock_count_in_diff_bcol = (N % b1 == 0) ?
+        dblock_count_in_bcol :
+        (int)ceil(1.0 * (N % b1) / db1);
+    const int dblock_count_in_diff_brow = (N % b2 == 0) ?
+        dblock_count_in_brow :
+        (int)ceil(1.0 * (N % b2) / db2);
+
+    // Indices of big block, that contains element (row_coord, col_coord)
+    const int curr_i_block_ind = row_coord / b1;
+    const int curr_j_block_ind = col_coord / b2;
+
+    // Horizontal and vertical shifts to corner big block
+    const int d1_shift = curr_i_block_ind * b1;
+    const int d2_shift = curr_j_block_ind * b2;
+    // Real values of height/width of current block-stripe/column
+    const int real_b1 = min(b1, N - d1_shift);
+    const int real_b2 = min(b2, N - d2_shift);
+    // Counts of small blocks in corner big block
+    const int dblock_count_in_corner_block_in_col =
+        (curr_i_block_ind == block_count_in_col - 1) ?
+        dblock_count_in_diff_bcol : dblock_count_in_bcol;
+    const int dblock_count_in_corner_block_in_row =
+        (curr_j_block_ind == block_count_in_row - 1) ?
+        dblock_count_in_diff_brow : dblock_count_in_brow;
+
+    // Corner coordinates in its big block
+    const int loc_row_coord = row_coord - d1_shift;
+    const int loc_col_coord = col_coord - d2_shift;
+    // Local coordinates of small block containing element (row_coord, col_coord)
+    const int id_border = loc_row_coord / db1;
+    const int jd_border = loc_col_coord / db2;
+    // Local shifts to small block containing element (row_coord, col_coord)
+    // and its sizes
+    const int id0_shift = id_border * db1;
+    const int id0_block_h = min(db1, real_b1 - id0_shift);
+    const int jd0_shift = jd_border * db2;
+    const int jd0_block_w = min(db2, real_b2 - jd0_shift);
+    // Corner coordinates in its small block
+    const int dloc_row_coord = loc_row_coord - id0_shift;
+    const int dloc_col_coord = loc_col_coord - jd0_shift;
+
+    double* dst_stripe = dst_ptr + d1_shift * N;
+    const double* src_stripe = src_ptr + (dst_stripe - dst_ptr);
+
+    // Copying of corner incomplete big block
+    {
+        double* dst_block = dst_stripe + d2_shift * real_b1;
+        const double* src_block = src_stripe + (dst_block - dst_stripe);
+        // Pointers to small-block-stripe containing element (row_coord, col_coord)
+        double* dst0_dstripe = dst_block + id0_shift * real_b2;
+        const double* src0_dstripe = src_block + (dst0_dstripe - dst_block);
+        // Firstly, copy incomplete small-block-stripe
+        for (int jd = jd_border; jd < dblock_count_in_corner_block_in_row; ++jd)
+        {
+            const int j_bd_shift = jd * db2;
+            const int j_lb_loc = max(loc_col_coord, j_bd_shift) - j_bd_shift;
+            const int jd_block_w = min(db2, real_b2 - j_bd_shift);
+
+            double* dst_dblock = dst0_dstripe + j_bd_shift * id0_block_h;
+            const double* src_dblock = src0_dstripe + (dst_dblock - dst0_dstripe);
+
+            const int cpy_size = (jd_block_w - j_lb_loc) * sizeof(double);
+            for (int l = dloc_row_coord; l < id0_block_h; ++l)
+            {
+                const int shift = l*jd_block_w + j_lb_loc;
+                memcpy(dst_dblock + shift,
+                    src_dblock + shift,
+                    cpy_size);
+            }
+        }
+
+        for (int id = id_border + 1; id < dblock_count_in_corner_block_in_col; ++id)
+        {
+            const int id_shift = id * db1;
+            const int id_block_h = min(db1, real_b1 - id_shift);
+            double* dst_dstripe = dst_block + id_shift * real_b2;
+            const double* src_dstripe = src_block + (dst_dstripe - dst_block);
+
+            double* dst_dblock = dst_dstripe + jd0_shift * id_block_h;
+            const double* src_dblock = src_dstripe + (dst_dblock - dst_dstripe);
+
+            const int cpy_size = (jd0_block_w - dloc_col_coord) * sizeof(double);
+            for (int l = 0; l < id_block_h; ++l)
+            {
+                const int shift = l*jd0_block_w + dloc_col_coord;
+                memcpy(dst_dblock + shift,
+                    src_dblock + shift,
+                    cpy_size);
+            }
+
+            const int shift = (jd0_shift + jd0_block_w) * id_block_h;
+            memcpy(dst_dstripe + shift,
+                src_dstripe + shift,
+                (real_b2*id_block_h - shift)*sizeof(double));
+        }
+    }
+
+    // Copy passing over first big-block-stripe, which can be incomplete
+    for (int jb = curr_j_block_ind + 1; jb < block_count_in_row; ++jb)
+    {
+        const int j_mb_shift = jb * b2;
+        const int jb_block_w = min(b2, N - j_mb_shift);
+        double* dst_block = dst_stripe + j_mb_shift * real_b1;
+        const double* src_block = src_stripe + (dst_block - dst_stripe);
+
+        double* dst0_dstripe = dst_block + id0_shift * jb_block_w;
+        const double* src0_dstripe = src_block + (dst0_dstripe - dst_block);
+
+        const int jd_ub = (jb == block_count_in_row - 1) ?
+            dblock_count_in_diff_brow : dblock_count_in_brow;
+        for (int jd = 0; jd < jd_ub; ++jd)
+        {
+            const int j_bd_shift = jd * db2;
+            const int jd_block_w = min(db2, jb_block_w - j_bd_shift);
+            double* dst_dblock = dst0_dstripe + j_bd_shift * id0_block_h;
+            const double* src_dblock = src0_dstripe + (dst_dblock - dst0_dstripe);
+
+            const int shift = dloc_row_coord * jd_block_w;
+            const int cpy_size = (id0_block_h*jd_block_w - shift)*sizeof(double);
+            memcpy(dst_dblock + shift,
+                src_dblock + shift,
+                cpy_size);
+        }
+
+        const int shift = (id0_shift + id0_block_h) * jb_block_w;
+        const int cpy_size = (real_b1*jb_block_w - shift)*sizeof(double);
+        memcpy(dst_block + shift, src_block + shift, cpy_size);
+    }
+
+    // Copy passing over left big-block-column, which can be incomplete
+    for (int ib = curr_i_block_ind + 1; ib < block_count_in_col; ++ib)
+    {
+        const int i_mb_shift = ib * b1;
+        const int ib_block_h = min(b1, N - i_mb_shift);
+        double* dst_block = dst_ptr + i_mb_shift*N + d2_shift*ib_block_h;
+        const double* src_block = src_ptr + (dst_block - dst_ptr);
+
+        const int id_ub = (ib == block_count_in_col - 1) ?
+            dblock_count_in_diff_bcol : dblock_count_in_bcol;
+        for (int id = 0; id < id_ub; ++id)
+        {
+            const int i_bd_shift = id * db1;
+            const int id_block_h = min(db1, ib_block_h - i_bd_shift);
+            double* dst_dstripe = dst_block + i_bd_shift * real_b2;
+            const double* src_dstripe = src_block + (dst_dstripe - dst_block);
+
+            double* dst_dblock_shifted = dst_dstripe + jd0_shift*id_block_h + dloc_col_coord;
+            const double* src_dblock_shifted = src_dstripe + (dst_dblock_shifted - dst_dstripe);
+            const int cpy_line_size = (jd0_block_w - dloc_col_coord) * sizeof(double);
+            for (int l = 0; l < id_block_h; ++l)
+            {
+                const int shift = l * jd0_block_w;
+                memcpy(dst_dblock_shifted + shift,
+                    src_dblock_shifted + shift,
+                    cpy_line_size);
+            }
+
+            const int shift = id_block_h * (jd0_shift + jd0_block_w);
+            const int cpy_size = (id_block_h*real_b2 - shift)*sizeof(double);
+            memcpy(dst_dstripe + shift,
+                src_dstripe + shift,
+                cpy_size);
+        }
+    }
+
+    // Copy passing over every big-block-stripe, which is complete
+    for (int ib = curr_i_block_ind + 1; ib < block_count_in_col; ++ib)
+    {
+        const int i_mb_shift = ib * b1;
+        const int ib_block_h = min(b1, N - i_mb_shift);
+        const int shift = ib_block_h*(d2_shift + real_b2);
+
+        double* dst_block = dst_ptr + i_mb_shift*N + shift;
+        const double* src_block = src_ptr + (dst_block - dst_ptr);
+        const int cpy_size = (ib_block_h*N - shift)*sizeof(double);
+        memcpy(dst_block, src_block, cpy_size);
+    }
+}
+
+// Fill part of source matrix with double block layout
+// by specifed value 'val'.
+// Matrix part is specified by left upper corner coordinates.
+void set_minor_double_block(double* dst_ptr,
+    const int val,
+    const int N,
+    const int b1, const int b2,
+    const int db1, const int db2,
+    const int row_coord, const int col_coord)
+{
+    if (row_coord >= N || col_coord >= N)
+    {
+        return;
+    }
+
+    // Big blocks counts in matrix
+    const int block_count_in_col = (int) ceil(1.0 * N / b1);
+    const int block_count_in_row = (int) ceil(1.0 * N / b2);
+    // Small blocks counts in big blocks
+    const int dblock_count_in_bcol = (int)ceil(1.0 * b1 / db1);
+    const int dblock_count_in_brow = (int)ceil(1.0 * b2 / db2);
+    const int dblock_count_in_diff_bcol = (N % b1 == 0) ?
+        dblock_count_in_bcol :
+        (int)ceil(1.0 * (N % b1) / db1);
+    const int dblock_count_in_diff_brow = (N % b2 == 0) ?
+        dblock_count_in_brow :
+        (int)ceil(1.0 * (N % b2) / db2);
+
+    // Indices of big block, that contains element (row_coord, col_coord)
+    const int curr_i_block_ind = row_coord / b1;
+    const int curr_j_block_ind = col_coord / b2;
+
+    // Horizontal and vertical shifts to corner big block
+    const int d1_shift = curr_i_block_ind * b1;
+    const int d2_shift = curr_j_block_ind * b2;
+    // Real values of height/width of current block-stripe/column
+    const int real_b1 = min(b1, N - d1_shift);
+    const int real_b2 = min(b2, N - d2_shift);
+    // Counts of small blocks in corner big block
+    const int dblock_count_in_corner_block_in_col =
+        (curr_i_block_ind == block_count_in_col - 1) ?
+        dblock_count_in_diff_bcol : dblock_count_in_bcol;
+    const int dblock_count_in_corner_block_in_row =
+        (curr_j_block_ind == block_count_in_row - 1) ?
+        dblock_count_in_diff_brow : dblock_count_in_brow;
+
+    // Corner coordinates in its big block
+    const int loc_row_coord = row_coord - d1_shift;
+    const int loc_col_coord = col_coord - d2_shift;
+    // Local coordinates of small block containing element (row_coord, col_coord)
+    const int id_border = loc_row_coord / db1;
+    const int jd_border = loc_col_coord / db2;
+    // Local shifts to small block containing element (row_coord, col_coord)
+    // and its sizes
+    const int id0_shift = id_border * db1;
+    const int id0_block_h = min(db1, real_b1 - id0_shift);
+    const int jd0_shift = jd_border * db2;
+    const int jd0_block_w = min(db2, real_b2 - jd0_shift);
+    // Corner coordinates in its small block
+    const int dloc_row_coord = loc_row_coord - id0_shift;
+    const int dloc_col_coord = loc_col_coord - jd0_shift;
+
+    double* dst_stripe = dst_ptr + d1_shift * N;
+
+    // Copying of corner incomplete big block
+    {
+        double* dst_block = dst_stripe + d2_shift * real_b1;
+        // Pointers to small-block-stripe containing element (row_coord, col_coord)
+        double* dst0_dstripe = dst_block + id0_shift * real_b2;
+        // Firstly, copy incomplete small-block-stripe
+        for (int jd = jd_border; jd < dblock_count_in_corner_block_in_row; ++jd)
+        {
+            const int j_bd_shift = jd * db2;
+            const int j_lb_loc = max(loc_col_coord, j_bd_shift) - j_bd_shift;
+            const int jd_block_w = min(db2, real_b2 - j_bd_shift);
+            double* dst_dblock_shifted = dst0_dstripe + j_bd_shift * id0_block_h + j_lb_loc;
+
+            const int cpy_size = (jd_block_w - j_lb_loc) * sizeof(double);
+            for (int l = dloc_row_coord; l < id0_block_h; ++l)
+            {
+                memset(dst_dblock_shifted + l*jd_block_w, val, cpy_size);
+            }
+        }
+
+        for (int id = id_border + 1; id < dblock_count_in_corner_block_in_col; ++id)
+        {
+            const int id_shift = id * db1;
+            const int id_block_h = min(db1, real_b1 - id_shift);
+            double* dst_dstripe = dst_block + id_shift * real_b2;
+            double* dst_dblock_shifted = dst_dstripe + jd0_shift * id_block_h + dloc_col_coord;
+
+            const int cpy_size = (jd0_block_w - dloc_col_coord) * sizeof(double);
+            for (int l = 0; l < id_block_h; ++l)
+            {
+                memset(dst_dblock_shifted + l*jd0_block_w, val, cpy_size);
+            }
+
+            const int shift = (jd0_shift + jd0_block_w) * id_block_h;
+            memset(dst_dstripe + shift, val,
+                (real_b2*id_block_h - shift)*sizeof(double));
+        }
+    }
+
+    // Copy passing over first big-block-stripe, which can be incomplete
+    for (int jb = curr_j_block_ind + 1; jb < block_count_in_row; ++jb)
+    {
+        const int j_mb_shift = jb * b2;
+        const int jb_block_w = min(b2, N - j_mb_shift);
+        double* dst_block = dst_stripe + j_mb_shift * real_b1;
+        double* dst0_dstripe = dst_block + id0_shift * jb_block_w;
+
+        const int jd_ub = (jb == block_count_in_row - 1) ?
+            dblock_count_in_diff_brow : dblock_count_in_brow;
+        for (int jd = 0; jd < jd_ub; ++jd)
+        {
+            const int j_bd_shift = jd * db2;
+            const int jd_block_w = min(db2, jb_block_w - j_bd_shift);
+            double* dst_dblock = dst0_dstripe + j_bd_shift * id0_block_h;
+
+            const int shift = dloc_row_coord * jd_block_w;
+            memset(dst_dblock + shift, val,
+                (id0_block_h*jd_block_w - shift)*sizeof(double));
+        }
+
+        const int shift = (id0_shift + id0_block_h) * jb_block_w;
+        const int set_size = (real_b1*jb_block_w - shift)*sizeof(double);
+        memset(dst_block + shift, val, set_size);
+    }
+
+    // Copy passing over left big-block-column, which can be incomplete
+    for (int ib = curr_i_block_ind + 1; ib < block_count_in_col; ++ib)
+    {
+        const int i_mb_shift = ib * b1;
+        const int ib_block_h = min(b1, N - i_mb_shift);
+        double* dst_block = dst_ptr + i_mb_shift*N + d2_shift*ib_block_h;
+
+        const int id_ub = (ib == block_count_in_col - 1) ?
+            dblock_count_in_diff_bcol : dblock_count_in_bcol;
+        for (int id = 0; id < id_ub; ++id)
+        {
+            const int i_bd_shift = id * db1;
+            const int id_block_h = min(db1, ib_block_h - i_bd_shift);
+            double* dst_dstripe = dst_block + i_bd_shift * real_b2;
+
+            double* dst_dblock_shifted = dst_dstripe + jd0_shift*id_block_h + dloc_col_coord;
+            const int set_line_size = (jd0_block_w - dloc_col_coord) * sizeof(double);
+            for (int l = 0; l < id_block_h; ++l)
+            {
+                memset(dst_dblock_shifted + l*jd0_block_w, val, set_line_size);
+            }
+
+            const int shift = id_block_h * (jd0_shift + jd0_block_w);
+            memset(dst_dstripe + shift, val,
+                (id_block_h*real_b2 - shift)*sizeof(double));
+        }
+    }
+
+    // Copy passing over every big-block-stripe, which is complete
+    for (int ib = curr_i_block_ind + 1; ib < block_count_in_col; ++ib)
+    {
+        const int i_mb_shift = ib * b1;
+        const int ib_block_h = min(b1, N - i_mb_shift);
+        const int shift = ib_block_h*(d2_shift + real_b2);
+        memset(dst_ptr + i_mb_shift*N + shift, val, (ib_block_h*N - shift)*sizeof(double));
+    }
+}
+
+// Copy part of source matrix with block layout
+// to according part of destinating matrix with the same layout.
+// Matrix part is specified by left upper corner coordinates.
+void copy_minor_block(double* dst_ptr,
+    const double* src_ptr,
+    const int N,
+    const int b1, const int b2,
+    const int row_coord, const int col_coord)
+{
+    if (row_coord >= N || col_coord >= N)
+    {
+        return;
+    }
+
+    // Big blocks counts in matrix
+    const int block_count_in_col = (int)ceil(1.0 * N / b1);
+    const int block_count_in_row = (int)ceil(1.0 * N / b2);
+    // Indices of big block, that contains element (row_coord, col_coord)
+    const int curr_i_block_ind = row_coord / b1;
+    const int curr_j_block_ind = col_coord / b2;
+    // Horizontal and vertical shifts to corner big block
+    const int d1_shift = curr_i_block_ind * b1;
+    const int d2_shift = curr_j_block_ind * b2;
+    // Real values of height/width of current block-stripe/column
+    const int real_b1 = min(b1, N - d1_shift);
+    const int real_b2 = min(b2, N - d2_shift);
+    // Corner coordinates in its big block
+    const int loc_row_coord = row_coord - d1_shift;
+    const int loc_col_coord = col_coord - d2_shift;
+
+    double* dst_stripe = dst_ptr + d1_shift * N;
+    const double* src_stripe = src_ptr + (dst_stripe - dst_ptr);
+
+    // * Copy of corner incomplete block
+
+    // Pointers to first element to copy in corner block
+    const double* src_row_shifted_CORNER = src_stripe + real_b1*d2_shift +
+        loc_row_coord*real_b2 + loc_col_coord;
+    double* dst_row_shifted_CORNER = dst_stripe +
+        (src_row_shifted_CORNER - src_stripe);
+    const int copy_size_CORNER = (real_b2 - loc_col_coord) * sizeof(double);
+    for (int i = loc_row_coord; i < real_b1; ++i)
+    {
+        memcpy(dst_row_shifted_CORNER,
+            src_row_shifted_CORNER,
+            copy_size_CORNER);
+        dst_row_shifted_CORNER += real_b2;
+        src_row_shifted_CORNER += real_b2;
+    }
+
+    // * Copy of first big-block-stripe, which can be incomplete
+    for (int jb = curr_j_block_ind + 1; jb < block_count_in_row; ++jb)
+    {
+        const int jb_shift = jb * b2;
+        const int jb_block_width = min(b2, N - jb_shift);
+        const int copy_size = jb_block_width * sizeof(double);
+        const double* src_row = src_stripe + jb_shift * real_b1 +
+            loc_row_coord * jb_block_width;
+        double* dst_row = dst_stripe + (src_row - src_stripe);
+        for (int i = loc_row_coord; i < real_b1; ++i)
+        {
+            memcpy(dst_row, src_row, copy_size);
+            dst_row += jb_block_width;
+            src_row += jb_block_width;
+        }
+    }
+
+    // * Copy of first big-block-column, which can be incomplete
+    const int copy_size_LEFT = (real_b2 - loc_col_coord) * sizeof(double);
+    for (int ib = curr_i_block_ind + 1; ib < block_count_in_col; ++ib)
+    {
+        const int ib_shift = ib * b1;
+        const int ib_block_h = min(b1, N - ib_shift);
+        double* dst_row = dst_ptr + ib_shift * N +
+            ib_block_h * d2_shift + loc_col_coord;
+        const double* src_row = src_ptr + (dst_row - dst_ptr);
+
+        for (int i = 0; i < ib_block_h; ++i)
+        {
+            memcpy(dst_row, src_row, copy_size_LEFT);
+            dst_row += real_b2;
+            src_row += real_b2;
+        }
+    }
+
+    // * Copy of remaining part of source matrix
+    const int main_part_shift = d2_shift + real_b2;
+    const int main_part_width_in_bytes = (N - main_part_shift) * sizeof(double);
+    for (int ib = curr_i_block_ind + 1; ib < block_count_in_col; ++ib)
+    {
+        const int ib_shift = ib * b1;
+        const int ib_block_h = min(b1, N - ib_shift);
+        double* dst_block = dst_ptr + ib_shift * N +
+            ib_block_h * main_part_shift;
+        const double* src_block = src_ptr + (dst_block - dst_ptr);
+
+        memcpy(dst_block, src_block, ib_block_h * main_part_width_in_bytes);
+    }
+}
+
+// Fill part of source matrix with block layout by specifed value 'val'.
+// Matrix part is specified by left upper corner coordinates.
+void set_minor_block(double* dst_ptr,
+    const int val,
+    const int N,
+    const int b1, const int b2,
+    const int row_coord,
+    const int col_coord)
+{
+    if (row_coord >= N || col_coord >= N)
+    {
+        return;
+    }
+
+    // Big blocks counts in matrix
+    const int block_count_in_col = (int)ceil(1.0 * N / b1);
+    const int block_count_in_row = (int)ceil(1.0 * N / b2);
+    // Indices of big block, that contains element (row_coord, col_coord)
+    const int curr_i_block_ind = row_coord / b1;
+    const int curr_j_block_ind = col_coord / b2;
+    // Horizontal and vertical shifts to corner big block
+    const int d1_shift = curr_i_block_ind * b1;
+    const int d2_shift = curr_j_block_ind * b2;
+    // Real values of height/width of current block-stripe/column
+    const int real_b1 = min(b1, N - d1_shift);
+    const int real_b2 = min(b2, N - d2_shift);
+    // Corner coordinates in its big block
+    const int loc_row_coord = row_coord - d1_shift;
+    const int loc_col_coord = col_coord - d2_shift;
+
+    double* dst_stripe = dst_ptr + d1_shift * N;
+
+    // * Set value for elements of corner incomplete block
+
+    // Pointer to first element to copy in corner block
+    double* dst_row_shifted_CORNER = dst_stripe + real_b1*d2_shift +
+        loc_row_coord*real_b2 + loc_col_coord;
+    const int copy_size_CORNER = (real_b2 - loc_col_coord) * sizeof(double);
+    for (int i = loc_row_coord; i < real_b1; ++i)
+    {
+        memset(dst_row_shifted_CORNER, val, copy_size_CORNER);
+        dst_row_shifted_CORNER += real_b2;
+    }
+
+    // * Set value for elements of first big-block-stripe, which can be incomplete
+    for (int jb = curr_j_block_ind + 1; jb < block_count_in_row; ++jb)
+    {
+        const int jb_shift = jb * b2;
+        const int jb_block_width = min(b2, N - jb_shift);
+        const int copy_size = jb_block_width * sizeof(double);
+        double* dst_row = dst_stripe + jb_shift * real_b1 +
+            loc_row_coord * jb_block_width;
+        for (int i = loc_row_coord; i < real_b1; ++i)
+        {
+            memset(dst_row, 0, copy_size);
+            dst_row += jb_block_width;
+        }
+    }
+
+    // * Copy of first big-block-column, which can be incomplete
+    const int copy_size_LEFT = (real_b2 - loc_col_coord) * sizeof(double);
+    for (int ib = curr_i_block_ind + 1; ib < block_count_in_col; ++ib)
+    {
+        const int ib_shift = ib * b1;
+        const int ib_block_h = min(b1, N - ib_shift);
+        double* dst_row = dst_ptr + ib_shift * N +
+            ib_block_h * d2_shift + loc_col_coord;
+
+        for (int i = 0; i < ib_block_h; ++i)
+        {
+            memset(dst_row, 0, copy_size_LEFT);
+            dst_row += real_b2;
+        }
+    }
+
+    // * Copy of remaining part of source matrix
+    const int main_part_shift = d2_shift + real_b2;
+    const int main_part_width_in_bytes = (N - main_part_shift) * sizeof(double);
+    for (int ib = curr_i_block_ind + 1; ib < block_count_in_col; ++ib)
+    {
+        const int ib_shift = ib * b1;
+        const int ib_block_h = min(b1, N - ib_shift);
+        double* dst_block = dst_ptr + ib_shift * N +
+            ib_block_h * main_part_shift;
+
+        memset(dst_block, 0, ib_block_h * main_part_width_in_bytes);
+    }
+}
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+double* QR_WY_tiled(double* A, const int N, const int b1, const int b2)
+{    
     // Counts of blocks in matrix
-    const int block_count_in_col = static_cast<int>(ceil(1.0 * N / b1));
-    const int block_count_in_row = static_cast<int>(ceil(1.0 * N / b2));
+    const int block_count_in_col = (int) ceil(1.0 * N / b1);
+    const int block_count_in_row = (int) ceil(1.0 * N / b2);
     
-    double* work_memory = reinterpret_cast<double*>(
+    double* work_memory = (double*)(
             calloc(N + b2 + 2*N*b2 + 2*N*N, sizeof(double)));
 
-    double* v =       new(work_memory)   double[N];
-    double* w =       new(v + N)         double[b2];
-    double* W =       new(w + b2)        double[N*b2];
-    double* Y =       new(W + N*b2)      double[N*b2];
-    double* WY =      new(Y + N*b2)      double[N*N];
-    double* Abuf =    new(WY + N*N)      double[N*N];
+    double* v =    work_memory;
+    double* w =    v + N;
+    double* W =    w + b2;
+    double* Y =    W + N*b2;
+    double* WY =   Y + N*b2;
+    double* Abuf = WY + N*N;
 
     // Indices of current block column and stripe
     int curr_i_block_ind = -1;
@@ -70,7 +622,7 @@ double* QR_WY_tiled(double* A, const TaskData& parameters)
             double* v_shifted_HV = v + it;
             for (int j = 0; j < N - it; ++j)
             {
-                const double buf(*A_shifted_HV);
+                const double buf = *A_shifted_HV;
                 *v_shifted_HV++ = buf;
                 norm += buf * buf;
                 A_shifted_HV += N;
@@ -81,7 +633,7 @@ double* QR_WY_tiled(double* A, const TaskData& parameters)
             // используется нормировка, т.ч. v[it] = 1
             for (int j = it + 1; j < N; ++j)
             {
-                double buf(v[j] /= beta);
+                double buf = v[j] /= beta;
                 scalar += buf * buf;
             }
             v[it] = 1.0;
@@ -103,7 +655,7 @@ double* QR_WY_tiled(double* A, const TaskData& parameters)
 
                 for (int i = 0; i < ub - lb; ++i)
                 {
-                    const double vi(*v_shifted++);
+                    const double vi = *v_shifted++;
                     for (int j = 0; j < j_iter_count_TRANSF; ++j)
                     {
                         (*w_shifted++) += (*A_row_shifted++) * vi;
@@ -130,7 +682,7 @@ double* QR_WY_tiled(double* A, const TaskData& parameters)
 
                 for (int i = 0; i < i_ub - i_lb; ++i)
                 {
-                    const double vi(*v_shifted++);
+                    const double vi = *v_shifted++;
                     for (int j = 0; j < j_iter_count_TRANSF; ++j)
                     {
                         (*A_row_shifted++) += vi * (*w_shifted++);
@@ -185,7 +737,7 @@ double* QR_WY_tiled(double* A, const TaskData& parameters)
                 const double* v_shifted_init = v + lambda;
                 for (int i = 0; i < N - lambda; ++i)
                 {
-                    const double buf_v(*v_shifted_init++);
+                    const double buf_v = *v_shifted_init++;
                     *Y_shifted_init = buf_v;
                     *W_shifted_init = beta * buf_v;
                     Y_shifted_init += b2;
@@ -209,7 +761,7 @@ double* QR_WY_tiled(double* A, const TaskData& parameters)
 
                     for (int i = 0; i < i_ub - i_lb; ++i)
                     {
-                        const double vi(*v_shifted++);
+                        const double vi = *v_shifted++;
                         for (int j = 0; j < it; ++j)
                         {
                             (*wp_Yv++) += (*Y_row++) * vi;
@@ -232,7 +784,7 @@ double* QR_WY_tiled(double* A, const TaskData& parameters)
                     for (int i = 0; i < i_ub - i_lb; ++i)
                     {
                         const double vi = *v_shifted++;
-                        double sum(0.0);
+                        double sum = 0.0;
                         for (int j = 0; j < it; ++j)
                         {
                             sum += (*W_row++) * (*wp_Ww++);
@@ -253,6 +805,7 @@ double* QR_WY_tiled(double* A, const TaskData& parameters)
         // (==) A(lamda:M-1, t:N-1) + [Y*(W^t)] * A(lamda:M-1, t:N-1)
 
         // Multiplication Y * W^t
+#pragma omp parallel for schedule(dynamic, 1)
         for (int ib = 0; ib < col_b_count; ++ib)
         {
             const int i_mb_shift = d1_shift + ib * b1;
@@ -280,7 +833,7 @@ double* QR_WY_tiled(double* A, const TaskData& parameters)
                     const int Wrow_diff_val = b2 - kbound;
                     for (int j = 0; j < j_iter_count; ++j)
                     {
-                        double sum(0.0);
+                        double sum = 0.0;
                         for (int k = 0; k < kbound; ++k)
                         {
                             sum += (*Y_row++) * (*W_row++);
@@ -309,6 +862,7 @@ double* QR_WY_tiled(double* A, const TaskData& parameters)
         }
 
         // Умножение A(lamda:N-1, t:N-1) += (Y * W^t) * A(lamda:N-1, t:N-1)
+#pragma omp parallel for schedule(dynamic, 1)
         for (int ib = 0; ib < col_b_count; ++ib)
         {
             const int i_lb = lambda + ib * b1;
@@ -337,7 +891,7 @@ double* QR_WY_tiled(double* A, const TaskData& parameters)
                     {
                         for (int j = 0; j < j_iter_count; ++j)
                         {
-                            double sum(*Abuf_row_shifted);
+                            double sum = *Abuf_row_shifted;
                             for (int k = 0; k < k_iter_count; ++k)
                             {
                                 sum += (*WY_row_shifted++) * (*A_row_shifted);
@@ -374,39 +928,33 @@ double* QR_WY_tiled(double* A, const TaskData& parameters)
     return A;
 }
 
-double* QR_WY_double_tiled(double* A, const TaskData& parameters)
+double* QR_WY_double_tiled(double* A,
+    const int N, const int b1, const int b2, const int db1, const int db2)
 {
-    // Main parameters of data layout
-    const int N = parameters.M_ROWS;
-    const int b1 = parameters.B_ROWS;
-    const int b2 = parameters.B_COLS;
-    const int db1 = parameters.D_ROWS;
-    const int db2 = parameters.D_COLS;
-
-    const int bsizes_ratio = static_cast<int>(ceil(1.0 * b2 / b1));
+    const int bsizes_ratio = (int)ceil(1.0 * b2 / b1);
     // Big blocks counts in matrix
-    const int block_count_in_col = static_cast<int>(ceil(1.0 * N / b1));
-    const int block_count_in_row = static_cast<int>(ceil(1.0 * N / b2));
+    const int block_count_in_col = (int)ceil(1.0 * N / b1);
+    const int block_count_in_row = (int)ceil(1.0 * N / b2);
     // Small blocks counts in big blocks
-    const int dblock_count_in_bcol = static_cast<int>(ceil(1.0 * b1 / db1));
-    const int dblock_count_in_brow = static_cast<int>(ceil(1.0 * b2 / db2));
+    const int dblock_count_in_bcol = (int)ceil(1.0 * b1 / db1);
+    const int dblock_count_in_brow = (int)ceil(1.0 * b2 / db2);
     const int dblock_count_in_diff_bcol = (N % b1 == 0) ?
         dblock_count_in_bcol :
-        static_cast<int>(ceil(1.0 * (N % b1) / db1));
+        (int)ceil(1.0 * (N % b1) / db1);
     const int dblock_count_in_diff_brow = (N % b2 == 0) ?
         dblock_count_in_brow :
-        static_cast<int>(ceil(1.0 * (N % b2) / db2));
+        (int)ceil(1.0 * (N % b2) / db2);
 
-    double* work_memory = reinterpret_cast<double*>(
+    double* work_memory = (double*)(
             calloc(N + b2 + 2*N*b2 + 2*N*N + db1, sizeof(double)));
 
-    double* v =       new(work_memory)   double[N];
-    double* w =       new(v + N)         double[b2];
-    double* sum_vec = new(w + b2)        double[db1];
-    double* W =       new(sum_vec + db1) double[N*b2];
-    double* Y =       new(W + N*b2)      double[N*b2];
-    double* WY =      new(Y + N*b2)      double[N*N];
-    double* Abuf =    new(WY + N*N)      double[N*N];
+    double* v =       work_memory;
+    double* w =       v + N;
+    double* sum_vec = w + b2;
+    double* W =       sum_vec + db1;
+    double* Y =       W + N*b2;
+    double* WY =      Y + N*b2;
+    double* Abuf =    WY + N*N;
 
     int curr_i_block_ind = -1;
     int curr_j_block_ind = -1;
@@ -457,7 +1005,7 @@ double* QR_WY_double_tiled(double* A, const TaskData& parameters)
             double* v_shifted_HV = v + full_shift;
             for (int i = 0; i < N - full_shift; ++i)
             {
-                double buf(*A_shifted_HV);
+                double buf = *A_shifted_HV;
                 v_shifted_HV[i] = buf;
                 norm += buf * buf;
                 A_shifted_HV += N;
@@ -469,7 +1017,7 @@ double* QR_WY_double_tiled(double* A, const TaskData& parameters)
             double* v_shifted_NORM = v + full_shift + 1;
             for (int j = 0; j < N-full_shift-1; ++j)
             {
-                double buf(v_shifted_NORM[j] /= beta);
+                double buf = v_shifted_NORM[j] /= beta;
                 scalar += buf * buf;
             }
             v[full_shift] = 1.0;
@@ -613,18 +1161,18 @@ double* QR_WY_double_tiled(double* A, const TaskData& parameters)
             const int dblock_col_index = it / db2;
 
             // Вычисление нормы и ск. произведения вектора Хаусхолдера
-            double scalar(1.0);
+            double scalar = 1.0;
             double* A_shifted_HV = A + (full_shift + 1)*N + full_shift;
             double* v_shifted_HV = v + full_shift + 1;
             for (int j = full_shift + 1; j < N; ++j)
             {
-                double buf(*A_shifted_HV);
+                double buf = *A_shifted_HV;
                 scalar += buf * buf;
                 (*v_shifted_HV++) = buf;
                 A_shifted_HV += N;
             }
             v[full_shift] = 1.0;
-            double beta(-2.0 / scalar);
+            double beta = -2.0 / scalar;
 
             // 'it' is count of accumulated columns in W and Y matrices
             // (equals index of columns, which is added at current iteration)
@@ -638,7 +1186,7 @@ double* QR_WY_double_tiled(double* A, const TaskData& parameters)
                 const double* v_shifted_WYinit = v + lambda;
                 for (int i = lambda; i < N; ++i)
                 {
-                    double buf_WYinit(*v_shifted_WYinit++);
+                    double buf_WYinit = *v_shifted_WYinit++;
                     *Y_shifted = buf_WYinit;
                     *W_shifted = beta * buf_WYinit;
                     Y_shifted += b2;
@@ -741,7 +1289,7 @@ double* QR_WY_double_tiled(double* A, const TaskData& parameters)
 
                             for (int i = 0; i < i_iter_count; ++i)
                             {
-                                double sum_loc(0.0);
+                                double sum_loc = 0.0;
                                 for (int j = 0; j < j_ub; ++j)
                                 {
                                     sum_loc += (*Wrow++) * (*w_shifted++);
@@ -761,7 +1309,7 @@ double* QR_WY_double_tiled(double* A, const TaskData& parameters)
                         const double* sum_vec_shifted = sum_vec + i_lb;
                         for (int i = 0; i < i_iter_count; ++i)
                         {
-                            double buf(v_shifted_WYadd[i]);
+                            double buf = v_shifted_WYadd[i];
                             *Wdblock_add = beta * (buf + sum_vec_shifted[i]);
                             *Ydblock_add = buf;
                             Wdblock_add += b2;
@@ -785,6 +1333,7 @@ double* QR_WY_double_tiled(double* A, const TaskData& parameters)
         }
 
         // Multiplication Y * W^t.
+#pragma omp parallel for schedule(dynamic, 1)
         for (int ib = 0; ib < col_b_count; ++ib)
         {
             const int i_mb_shift = d1_shift + ib*b1;
@@ -886,6 +1435,7 @@ double* QR_WY_double_tiled(double* A, const TaskData& parameters)
         // which is already contain elements of 'A'.
         // It allows to avoid using of elements of matrix 'A',
         // which have results of multiplication, when we need their old values.
+#pragma omp parallel for schedule(dynamic, 1)
         for (int ib = 0; ib < col_b_count; ++ib)
         {
             const int i_mb_shift = d1_shift + ib*b1;
@@ -948,7 +1498,7 @@ double* QR_WY_double_tiled(double* A, const TaskData& parameters)
                                     const double* WY_row = WY_dstripe_shifted;
                                     for (int j = 0; j < j_ub; ++j)
                                     {
-                                        double sum(0.0);
+                                        double sum = 0.0;
                                         for (int k = 0; k < k_ub; ++k)
                                         {
                                             sum += (*WY_row++) * (*A_row);
@@ -987,15 +1537,15 @@ double* QR_WY_double_tiled(double* A, const TaskData& parameters)
 
 double* QR_WY_standard(double* A, const int N, const int r)
 {
-    double* work_memory = reinterpret_cast<double*>(
+    double* work_memory = (double*)(
         calloc(N + r + 2*N*r + 2*N*N, sizeof(double)));
 
-    double* v    = new(work_memory) double[N];
-    double* w    = new(v + N)       double[r];
-    double* W    = new(w + r)       double[N * r];
-    double* Y    = new(W + N * r)   double[N * r];
-    double* WY   = new(Y + N * r)   double[N * N];
-    double* Abuf = new(WY + N * N)  double[N * N];
+    double* v    = work_memory;
+    double* w    = v + N;
+    double* W    = w + r;
+    double* Y    = W + N * r;
+    double* WY   = Y + N * r;
+    double* Abuf = WY + N * N;
 
     // lambda указывает на начало текущего блока
     for (int lambda = 0; lambda < N; lambda += r)
@@ -1124,6 +1674,7 @@ double* QR_WY_standard(double* A, const int N, const int r)
         // (==) A(lamda:M-1, t:N-1) + [Y*(W^t)] * A(lamda:M-1, t:N-1)
         
         // Умножение Y * W^t
+#pragma omp parallel for schedule(dynamic, 1)
         for (int i = lambda; i < N; ++i)
         {
             double* WYi = WY + i*N;
@@ -1141,6 +1692,7 @@ double* QR_WY_standard(double* A, const int N, const int r)
         }
 
         // Умножение A(lamda:M-1, t:N-1) += (Y * W^t) * A(lamda:M-1, t:N-1)
+#pragma omp parallel for schedule(dynamic, 1)
         for (int i = lambda; i < N; ++i)
         {
             double* Abuf_i = Abuf + i*N;
@@ -1171,23 +1723,20 @@ double* QR_WY_standard(double* A, const int N, const int r)
     return A;
 }
 
-double* QR_WY_block(double* A, const TaskData& parameters)
+double* QR_WY_block(double* A, const int N, const int b1, const int b2)
 {
-    const int N = parameters.M_ROWS;
-    const int b1 = parameters.B_ROWS;
-    const int b2 = parameters.B_COLS;
-    const int block_count_in_col = static_cast<int>(ceil(1.0 * N / b1));
-    const int block_count_in_row = static_cast<int>(ceil(1.0 * N / b2));
+    const int block_count_in_col = (int)ceil(1.0 * N / b1);
+    const int block_count_in_row = (int)ceil(1.0 * N / b2);
 
-    double* work_memory = reinterpret_cast<double*>(
+    double* work_memory = (double*)(
         calloc(N + b2 + 2*N*b2 + 2*N*N, sizeof(double)));
 
-    double* v =       new(work_memory)  double[N];
-    double* w =       new(v + N)        double[b2];
-    double* W =       new(w + b2) double[N*b2];
-    double* Y =       new(W + N*b2)     double[N*b2];
-    double* WY =      new(Y + N*b2)     double[N*N];
-    double* Abuf =    new(WY + N*N)     double[N*N];
+    double* v =    work_memory;
+    double* w =    v + N;
+    double* W =    w + b2;
+    double* Y =    W + N*b2;
+    double* WY =   Y + N*b2;
+    double* Abuf = WY + N*N;
 
     int curr_i_block_ind = -1;
     int curr_j_block_ind = -1;
@@ -1224,7 +1773,7 @@ double* QR_WY_block(double* A, const TaskData& parameters)
             memset(v + lambda, 0, it * sizeof(double));
             
             // * Вычисление вектора Хаусхолдера
-            double norm(0.0);
+            double norm = 0.0;
             for (int jb = b_begin; jb < col_b_count; ++jb)
             {
                 // сдвиг линии блока от линии матрицы
@@ -1241,7 +1790,7 @@ double* QR_WY_block(double* A, const TaskData& parameters)
                 // j - номер строки в блоке jb (локальная нумерация)
                 for (int j = 0; j < j_ub - j_lb; ++j)
                 {
-                    double buf(*Ablock_shifted);
+                    double buf = *Ablock_shifted;
                     v_shifted[j] = buf;
                     norm += buf * buf;
                     Ablock_shifted += d2;
@@ -1254,10 +1803,10 @@ double* QR_WY_block(double* A, const TaskData& parameters)
             const double diag_el_sign = (A_diag_el < 0) ? -1 : 1;
             double beta = A_diag_el + diag_el_sign * sqrt(norm);
             // используется нормировка, т.ч. v[it] = 1
-            double scalar(1.0);
+            double scalar = 1.0;
             for (int j = full_shift + 1; j < N; ++j)
             {
-                double buf(v[j] /= beta);
+                double buf = v[j] /= beta;
                 scalar += buf * buf;
             }
             v[full_shift] = 1.0;
@@ -1287,7 +1836,7 @@ double* QR_WY_block(double* A, const TaskData& parameters)
                 // j - номер столбца в блоке kb (локальная нумерация)
                 for (int j = it; j < d2; ++j)
                 {
-                    double sum(0.0);
+                    double sum = 0.0;
                     for (int k = 0; k < k_iter_count; ++k)
                     {
                         sum += (*Ablock_shifted) * v_shifted[k];
@@ -1322,7 +1871,7 @@ double* QR_WY_block(double* A, const TaskData& parameters)
                 // j - номер строки в блоке jb (локальная нумерация)
                 for (int j = 0; j < j_ub - j_lb; ++j)
                 {
-                    const double vj(v_shifted[j]);
+                    const double vj = v_shifted[j];
                     // k - номер столбца в блоке jb (локальная нумерация)
                     for (int k = 0; k < w_diff_val_TRANSF; ++k)
                     {
@@ -1372,7 +1921,7 @@ double* QR_WY_block(double* A, const TaskData& parameters)
             memset(w, 0, d2*sizeof(double));
             memset(v + lambda, 0, it*sizeof(double));
 
-            double scalar(1.0), buf(0.0);
+            double scalar = 1.0, buf = 0.0;
             // * Вычисление нормы и ск. произведения вектора Хаусхолдера
             for (int jb = (full_shift+1 - d1_shift)/b1; jb < col_b_count; ++jb)
             {
@@ -1419,7 +1968,7 @@ double* QR_WY_block(double* A, const TaskData& parameters)
                     const double* v_shifted = v + mb_shift + i_lb;
                     for (int i = 0; i < i_ub - i_lb; ++i)
                     {
-                        double v_buf(v_shifted[i]);
+                        double v_buf = v_shifted[i];
                         *Yrow = v_buf;
                         *Wrow = beta * v_buf;
                         Yrow += b2;
@@ -1470,7 +2019,7 @@ double* QR_WY_block(double* A, const TaskData& parameters)
                     const double* v_shifted = v + i_lb;
                     for (int i = 0; i < i_ub - i_lb; ++i)
                     {
-                        double sum(0.0);
+                        double sum = 0.0;
                         for (int j = 0; j < it; ++j)
                         {
                             sum += Wrow[j] * wp_Ww[j];
@@ -1492,6 +2041,7 @@ double* QR_WY_block(double* A, const TaskData& parameters)
 
         // Умножение Y * W^t
         // Матрица 'WY' будет иметь 'b1' x 'b1' размещение
+#pragma omp parallel for schedule(dynamic, 1)
         for (int ib = 0; ib < col_b_count; ++ib)
         {
             const int i_mb_shift = d1_shift + ib * b1;
@@ -1524,7 +2074,7 @@ double* QR_WY_block(double* A, const TaskData& parameters)
                                         
                     for (int j = 0; j < j_iter_count; ++j)
                     {
-                        double sum(0.0);
+                        double sum = 0.0;
                         for (int k = 0; k < kbound; ++k)
                         {
                             sum += (*Yrow++) * (*Wrow++);
@@ -1542,10 +2092,11 @@ double* QR_WY_block(double* A, const TaskData& parameters)
             }
         }
 
-        copy_minor_block(Abuf, A, parameters, d1_shift, d2_shift);
+        copy_minor_block(Abuf, A, N, b1, b2, d1_shift, d2_shift);
 
         // Умножение A(lamda:M-1, t:N-1) += (Y * W^t) * A(lamda:M-1, t:N-1)
         // Размещение: (b1 x b2) = (b1 x b1) * (b1 x b2)
+#pragma omp parallel for schedule(dynamic, 1)
         for (int ib = 0; ib < col_b_count; ++ib)
         {
             const int i_mb_shift = d1_shift + ib * b1;
@@ -1580,7 +2131,7 @@ double* QR_WY_block(double* A, const TaskData& parameters)
                     {
                         for (int j = 0; j < jb_block_w; ++j)
                         {
-                            double sum(0.0);
+                            double sum = 0.0;
                             for (int k = 0; k < k_iter_count; ++k)
                             {
                                 sum += WYrow_shifted[k] * (*Arow_shifted);
@@ -1599,7 +2150,7 @@ double* QR_WY_block(double* A, const TaskData& parameters)
         }
 
         // Копирование преобразованной части матрицы A
-        copy_minor_block(A, Abuf, parameters, d1_shift, d2_shift);
+        copy_minor_block(A, Abuf, N, b1, b2, d1_shift, d2_shift);
 
     }// WHILE
 
@@ -1608,46 +2159,37 @@ double* QR_WY_block(double* A, const TaskData& parameters)
     return A;
 }
 
-double* QR_WY_double_block(double* A, const TaskData& parameters)
+double* QR_WY_double_block(double* A,
+    const int N, const int b1, const int b2, const int db1, const int db2)
 {
-    // Main parameters of data layout
-    const int N = parameters.M_ROWS;
-    const int b1 = parameters.B_ROWS;
-    const int b2 = parameters.B_COLS;
-    const int db1 = parameters.D_ROWS;
-    const int db2 = parameters.D_COLS;
-
-    const int bsizes_ratio = static_cast<int>(ceil(1.0 * b2 / b1));
+    const int bsizes_ratio = (int)ceil(1.0 * b2 / b1);
     // Big blocks counts in matrix
-    const int block_count_in_col = static_cast<int>(ceil(1.0 * N / b1));
-    const int block_count_in_row = static_cast<int>(ceil(1.0 * N / b2));
+    const int block_count_in_col = (int)ceil(1.0 * N / b1);
+    const int block_count_in_row = (int)ceil(1.0 * N / b2);
     // Small blocks counts in big blocks
-    const int dblock_count_in_bcol = static_cast<int>(ceil(1.0 * b1 / db1));
-    const int dblock_count_in_brow = static_cast<int>(ceil(1.0 * b2 / db2));
+    const int dblock_count_in_bcol = (int)ceil(1.0 * b1 / db1);
+    const int dblock_count_in_brow = (int)ceil(1.0 * b2 / db2);
     const int dblock_count_in_diff_bcol = (N % b1 == 0) ?
         dblock_count_in_bcol :
-        static_cast<int>(ceil(1.0 * (N % b1) / db1));
+        (int)ceil(1.0 * (N % b1) / db1);
     const int dblock_count_in_diff_brow = (N % b2 == 0) ?
         dblock_count_in_brow :
-        static_cast<int>(ceil(1.0 * (N % b2) / db2));
+        (int)ceil(1.0 * (N % b2) / db2);
 
-    double* work_memory = reinterpret_cast<double*>(
+    double* work_memory = (double*)(
             calloc(N + b2 + 2*N*b2 + 2*N*N + db1, sizeof(double)));
 
-    double* v =       new(work_memory)   double[N];
-    double* w =       new(v + N)         double[b2];
-    double* sum_vec = new(w + b2)        double[db1];
-    double* W =       new(sum_vec + db1) double[N*b2];
-    double* Y =       new(W + N*b2)      double[N*b2];
-    double* WY =      new(Y + N*b2)      double[N*N];
-    double* Abuf =    new(WY + N*N)      double[N*N];
+    double* v =       work_memory;
+    double* w =       v + N;
+    double* sum_vec = w + b2;
+    double* W =       sum_vec + db1;
+    double* Y =       W + N*b2;
+    double* WY =      Y + N*b2;
+    double* Abuf =    WY + N*N;
 
     int curr_i_block_ind = -1;
     int curr_j_block_ind = -1;
-
-    // Layout data for WY-matrix
-    TaskClass WY_task_class;
-
+    
     for (int lambda = 0; lambda < N; lambda += b2)
     {
         // Indices of big block, that contains element (lambda,lambda).
@@ -1695,7 +2237,7 @@ double* QR_WY_double_block(double* A, const TaskData& parameters)
             // * Householder vector computation...
             // Using of 'it'-th column of current block-column,
             // starting with (lambda+it)-th position
-            double norm(0.0);
+            double norm = 0.0;
             for (int ib = b_begin; ib < col_b_count; ++ib)
             {
                 // Shift of current big block first line
@@ -1738,7 +2280,7 @@ double* QR_WY_double_block(double* A, const TaskData& parameters)
                     
                     for (int i = 0; i < ub - lb; ++i)
                     {
-                        double buf(*Adblock_shifted);
+                        double buf = *Adblock_shifted;
                         v_shifted[i] = buf;
                         norm += buf * buf;
 
@@ -1760,11 +2302,11 @@ double* QR_WY_double_block(double* A, const TaskData& parameters)
             const double diag_el_sign = (A_diag_el < 0) ? -1 : 1;
             double beta = A_diag_el + diag_el_sign * sqrt(norm);
             // Use normalization such that v[it] = 1
-            double scalar(1.0);
+            double scalar = 1.0;
             double* v_shifted_NORM = v + full_shift + 1;
             for (int j = 0; j < N - full_shift - 1; ++j)
             {
-                double buf(v_shifted_NORM[j] /= beta);
+                double buf = v_shifted_NORM[j] /= beta;
                 scalar += buf * buf;
             }
             v[full_shift] = 1.0;
@@ -1825,7 +2367,7 @@ double* QR_WY_double_block(double* A, const TaskData& parameters)
 
                         for (int j = 0; j < j_iter_count; ++j)
                         {
-                            double sum(0.0);
+                            double sum = 0.0;
                             for (int k = 0; k < k_iter_count; ++k)
                             {
                                 sum += (*Arow_shifted) * v_kd_shifted[k];
@@ -1976,7 +2518,7 @@ double* QR_WY_double_block(double* A, const TaskData& parameters)
 
                     for (int i = 0; i < ub - lb; ++i)
                     {
-                        double buf(*Adblock_shifted);
+                        double buf = *Adblock_shifted;
                         Adblock_shifted += dblock_width;
                         scalar += buf * buf;
                         v_shifted[i] = buf;
@@ -2018,7 +2560,7 @@ double* QR_WY_double_block(double* A, const TaskData& parameters)
 
                         for (int i = 0; i < ub - lb; ++i)
                         {
-                            double v_buf(v_shifted[i]);
+                            double v_buf = v_shifted[i];
                             *Ydblock = v_buf;
                             *Wdblock = beta * v_buf;
                             Ydblock += dblock_width_WY;
@@ -2125,7 +2667,7 @@ double* QR_WY_double_block(double* A, const TaskData& parameters)
 
                             for (int i = 0; i < i_iter_count; ++i)
                             {
-                                double sum_loc(0.0);
+                                double sum_loc = 0.0;
                                 for (int j = 0; j < j_ub; ++j)
                                 {
                                     sum_loc += Wrow[j] * w_shifted[j];
@@ -2146,7 +2688,7 @@ double* QR_WY_double_block(double* A, const TaskData& parameters)
 
                         for (int i = 0; i < i_iter_count; ++i)
                         {
-                            double buf(v_shifted[i]);
+                            double buf = v_shifted[i];
                             *Wdblock_add = beta * (buf + sum_vec_shifted[i]);
                             *Ydblock_add = buf;
                             Wdblock_add += dblock_width_WY;
@@ -2161,12 +2703,11 @@ double* QR_WY_double_block(double* A, const TaskData& parameters)
         // A(lamda:M-1, t:N-1) = (I + W*(Y^t))^t * A(lamda:M-1, t:N-1) (==)
         // (==) A(lamda:M-1, t:N-1) + [Y*(W^t)] * A(lamda:M-1, t:N-1)
 
-        // Constructing layout data for WY-matrix
-        WY_task_class = TaskClass(N, N, b1, b1, db1, db1);
-        set_minor_double_block(WY, 0, WY_task_class.getDataRef(), d1_shift, d1_shift);
+        set_minor_double_block(WY, 0, N, b1, b1, db1, db1, d1_shift, d1_shift);
 
         // Multiplication Y * W^t .
         // Remark: WY matrix get (B1,B1,D1,D1)-layout.
+#pragma omp parallel for schedule(dynamic, 1)
         for (int ib = 0; ib < col_b_count; ++ib)
         {
             const int i_mb_shift = d1_shift + ib * b1;
@@ -2242,7 +2783,7 @@ double* QR_WY_double_block(double* A, const TaskData& parameters)
                             {
                                 for (int j = 0; j < j_iter_count; ++j)
                                 {
-                                    double sum(0.0);
+                                    double sum = 0.0;
                                     for (int k = 0; k < k_ub; ++k)
                                     {
                                         sum += (*Yrow++) * (*Wrow++);
@@ -2265,11 +2806,12 @@ double* QR_WY_double_block(double* A, const TaskData& parameters)
             }
         }
 
-        copy_minor_double_block(Abuf, A, parameters, d1_shift, d2_shift);
+        copy_minor_double_block(Abuf, A, N, b1, b2, db1, db2, d1_shift, d2_shift);
 
         // Multiplication A(lamda:N-1, t:N-1) += (Y * W^t) * A(lamda:M-1, t:N-1) <=>
         //                A(lamda:N-1, t:N-1) += WY * A(lamda:N-1, t:N-1) .
         // Layout pattern: (b1 x b2, d1 x d2) = (b1 x b1, d1 x d1) * (b1 x b2, d1 x d2).
+#pragma omp parallel for schedule(dynamic, 1)
         for (int ib = 0; ib < col_b_count; ++ib)
         {
             const int i_mb_shift = d1_shift + ib*b1;
@@ -2347,7 +2889,7 @@ double* QR_WY_double_block(double* A, const TaskData& parameters)
                                 {
                                     for (int j = 0; j < j_ub; ++j)
                                     {
-                                        double sum(0.0);
+                                        double sum = 0.0;
                                         for (int k = 0; k < k_iter_count; ++k)
                                         {
                                             sum += WY_row_shifted[k] * (*A_row);
@@ -2370,10 +2912,14 @@ double* QR_WY_double_block(double* A, const TaskData& parameters)
             }
         }
 
-        copy_minor_double_block(A, Abuf, parameters, d1_shift, d2_shift);
+        copy_minor_double_block(A, Abuf, N, b1, b2, db1, db2, d1_shift, d2_shift);
     }// WHILE
     
     free(work_memory);
 
     return A;
 }
+
+#ifdef __cplusplus
+    }
+#endif
