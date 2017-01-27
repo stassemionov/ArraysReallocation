@@ -1,13 +1,14 @@
-#include "floydalg.h"
+#include <floydalg.h>
 
+#include <stdlib.h>
 #include <math.h>
-
-#define max(a,b) ((a) > (b) ? (a) : (b))
-#define min(a,b) ((a) < (b) ? (a) : (b))
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+#define max(a,b) ((a) > (b) ? (a) : (b))
+#define min(a,b) ((a) < (b) ? (a) : (b))
 
 double* floyd_standard(double* data, const int N)
 {
@@ -261,3 +262,4 @@ double* floyd_block(double* data, const int N, const int B)
 #ifdef __cplusplus
     }
 #endif
+

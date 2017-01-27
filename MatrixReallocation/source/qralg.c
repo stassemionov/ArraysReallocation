@@ -1,8 +1,11 @@
-#include "qralg.h"
+#include <qralg.h>
 
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
+
+#define max(a,b) ((a) > (b) ? (a) : (b))
+#define min(a,b) ((a) < (b) ? (a) : (b))
 
 // Copy part of source matrix with double block layout
 // to according part of destinating matrix with the same layout.
@@ -603,21 +606,21 @@ double* QR_WY_tiled(double* A, const int N, const int b1, const int b2)
         // Count of big blocks below and including current big block in its block-column
         const int col_b_count = block_count_in_col - curr_i_block_ind;
 
-        // Выполнение преобразований над текущим блоком
+        // \C2\FB\EF\EE\EB\ED\E5\ED\E8\E5 \EF\F0\E5\EE\E1\F0\E0\E7\EE\E2\E0\ED\E8\E9 \ED\E0\E4 \F2\E5\EA\F3\F9\E8\EC \E1\EB\EE\EA\EE\EC
         for (int it = lambda; it < t; ++it)
         {
             const int loc_it = it - lambda;
             const int w_diff_val = t - it;
             const int A_diff_val = N - w_diff_val;
-            // Индекс большого блока, содержащего 'lambda+it'-ый диагональный элемент,
-            // считая от блока, содержащего 'lambda'-ый элемент
+            // \C8\ED\E4\E5\EA\F1 \E1\EE\EB\FC\F8\EE\E3\EE \E1\EB\EE\EA\E0, \F1\EE\E4\E5\F0\E6\E0\F9\E5\E3\EE 'lambda+it'-\FB\E9 \E4\E8\E0\E3\EE\ED\E0\EB\FC\ED\FB\E9 \FD\EB\E5\EC\E5\ED\F2,
+            // \F1\F7\E8\F2\E0\FF \EE\F2 \E1\EB\EE\EA\E0, \F1\EE\E4\E5\F0\E6\E0\F9\E5\E3\EE 'lambda'-\FB\E9 \FD\EB\E5\EC\E5\ED\F2
             const int b_begin = (it - d1_shift) / b1;
 
             memset(w, 0, d2*sizeof(double));
 
             double norm = 0.0;
             double scalar = 1.0;
-            // * Вычисление вектора Хаусхолдера
+            // * \C2\FB\F7\E8\F1\EB\E5\ED\E8\E5 \E2\E5\EA\F2\EE\F0\E0 \D5\E0\F3\F1\F5\EE\EB\E4\E5\F0\E0
             const double* A_shifted_HV = A + it*N + it;
             double* v_shifted_HV = v + it;
             for (int j = 0; j < N - it; ++j)
@@ -630,7 +633,7 @@ double* QR_WY_tiled(double* A, const int N, const int b1, const int b2)
             const double A_diag_el = A[it*N + it];
             const double diag_el_sign = (A_diag_el < 0) ? -1 : 1;
             double beta = A_diag_el + diag_el_sign * sqrt(norm);
-            // используется нормировка, т.ч. v[it] = 1
+            // \E8\F1\EF\EE\EB\FC\E7\F3\E5\F2\F1\FF \ED\EE\F0\EC\E8\F0\EE\E2\EA\E0, \F2.\F7. v[it] = 1
             for (int j = it + 1; j < N; ++j)
             {
                 double buf = v[j] /= beta;
@@ -639,10 +642,10 @@ double* QR_WY_tiled(double* A, const int N, const int b1, const int b2)
             v[it] = 1.0;
             beta = -2.0 / scalar;
 
-            // * Применение преобразования
+            // * \CF\F0\E8\EC\E5\ED\E5\ED\E8\E5 \EF\F0\E5\EE\E1\F0\E0\E7\EE\E2\E0\ED\E8\FF
 
-            // Вычисление вектора w = beta * (A(:,lambda:t-1)^t) * v .
-            // начинаем с it, т.к. it-ая матрица Хаусхолдера действует на матрицу A(it:,it:)
+            // \C2\FB\F7\E8\F1\EB\E5\ED\E8\E5 \E2\E5\EA\F2\EE\F0\E0 w = beta * (A(:,lambda:t-1)^t) * v .
+            // \ED\E0\F7\E8\ED\E0\E5\EC \F1 it, \F2.\EA. it-\E0\FF \EC\E0\F2\F0\E8\F6\E0 \D5\E0\F3\F1\F5\EE\EB\E4\E5\F0\E0 \E4\E5\E9\F1\F2\E2\F3\E5\F2 \ED\E0 \EC\E0\F2\F0\E8\F6\F3 A(it:,it:)
             const int j_iter_count_TRANSF = t - it;
             for (int ib = b_begin; ib < col_b_count; ++ib)
             {
@@ -692,8 +695,8 @@ double* QR_WY_tiled(double* A, const int N, const int b1, const int b2)
                 }
             }
 
-            // * Заполнение поддиагнальной части it-го столбца матрицы A
-            //   информативной частью вектора Хаусхолдера
+            // * \C7\E0\EF\EE\EB\ED\E5\ED\E8\E5 \EF\EE\E4\E4\E8\E0\E3\ED\E0\EB\FC\ED\EE\E9 \F7\E0\F1\F2\E8 it-\E3\EE \F1\F2\EE\EB\E1\F6\E0 \EC\E0\F2\F0\E8\F6\FB A
+            //   \E8\ED\F4\EE\F0\EC\E0\F2\E8\E2\ED\EE\E9 \F7\E0\F1\F2\FC\FE \E2\E5\EA\F2\EE\F0\E0 \D5\E0\F3\F1\F5\EE\EB\E4\E5\F0\E0
             double* A_shifted_fill = A + (it + 1)*N + it;
             const double* v_shifted_fill = v + it + 1;
             for (int j = it + 1; j < N; ++j)
@@ -703,7 +706,7 @@ double* QR_WY_tiled(double* A, const int N, const int b1, const int b2)
             }
         }// FOR
 
-         // * Вычисление WY-представления произведения матриц Хаусхолдера
+         // * \C2\FB\F7\E8\F1\EB\E5\ED\E8\E5 WY-\EF\F0\E5\E4\F1\F2\E0\E2\EB\E5\ED\E8\FF \EF\F0\EE\E8\E7\E2\E5\E4\E5\ED\E8\FF \EC\E0\F2\F0\E8\F6 \D5\E0\F3\F1\F5\EE\EB\E4\E5\F0\E0
         const int d = t - lambda;
         for (int it = 0; it < d; ++it)
         {
@@ -713,7 +716,7 @@ double* QR_WY_tiled(double* A, const int N, const int b1, const int b2)
             memset(v + d1_shift, 0, (N - d1_shift)*sizeof(double));
 
             double scalar = 1, buf;
-            // * Вычисление нормы и ск. произведения вектора Хаусхолдера
+            // * \C2\FB\F7\E8\F1\EB\E5\ED\E8\E5 \ED\EE\F0\EC\FB \E8 \F1\EA. \EF\F0\EE\E8\E7\E2\E5\E4\E5\ED\E8\FF \E2\E5\EA\F2\EE\F0\E0 \D5\E0\F3\F1\F5\EE\EB\E4\E5\F0\E0
             const double* A_shifted_HV = A + (shift + 1)*N + shift;
             double* v_shifted_HV = v + shift + 1;
             for (int j = shift + 1; j < N; ++j)
@@ -726,12 +729,12 @@ double* QR_WY_tiled(double* A, const int N, const int b1, const int b2)
             v[shift] = 1.0;
             double beta = -2.0 / scalar;
 
-            // it - число накопленных столбцов в матрицах W и Y (= номеру дозаписываемого столбца)
+            // it - \F7\E8\F1\EB\EE \ED\E0\EA\EE\EF\EB\E5\ED\ED\FB\F5 \F1\F2\EE\EB\E1\F6\EE\E2 \E2 \EC\E0\F2\F0\E8\F6\E0\F5 W \E8 Y (= \ED\EE\EC\E5\F0\F3 \E4\EE\E7\E0\EF\E8\F1\FB\E2\E0\E5\EC\EE\E3\EE \F1\F2\EE\EB\E1\F6\E0)
             if (it == 0)
             {
-                // Начальное заполнение первого столбца
-                // замечание: первые lambda строк матриц W и Y - нулевые,
-                //            матрицы имеют ступенчатый вид.
+                // \CD\E0\F7\E0\EB\FC\ED\EE\E5 \E7\E0\EF\EE\EB\ED\E5\ED\E8\E5 \EF\E5\F0\E2\EE\E3\EE \F1\F2\EE\EB\E1\F6\E0
+                // \E7\E0\EC\E5\F7\E0\ED\E8\E5: \EF\E5\F0\E2\FB\E5 lambda \F1\F2\F0\EE\EA \EC\E0\F2\F0\E8\F6 W \E8 Y - \ED\F3\EB\E5\E2\FB\E5,
+                //            \EC\E0\F2\F0\E8\F6\FB \E8\EC\E5\FE\F2 \F1\F2\F3\EF\E5\ED\F7\E0\F2\FB\E9 \E2\E8\E4.
                 double* Y_shifted_init = Y + lambda*b2;
                 double* W_shifted_init = W + lambda*b2;
                 const double* v_shifted_init = v + lambda;
@@ -750,7 +753,7 @@ double* QR_WY_tiled(double* A, const int N, const int b1, const int b2)
 
                 const int W_Y_diff_val = b2 - it;
 
-                // Вычисление произведения (Y^t) * v
+                // \C2\FB\F7\E8\F1\EB\E5\ED\E8\E5 \EF\F0\EE\E8\E7\E2\E5\E4\E5\ED\E8\FF (Y^t) * v
                 double* wp_Yv = w;
                 for (int ib = b_begin; ib < col_b_count; ++ib)
                 {
@@ -771,7 +774,7 @@ double* QR_WY_tiled(double* A, const int N, const int b1, const int b2)
                     }
                 }
 
-                // Вычисление произведения W * ((Y^t) * v) <=> W * w
+                // \C2\FB\F7\E8\F1\EB\E5\ED\E8\E5 \EF\F0\EE\E8\E7\E2\E5\E4\E5\ED\E8\FF W * ((Y^t) * v) <=> W * w
                 const double* wp_Ww = w;
                 for (int ib = 0; ib < col_b_count; ++ib)
                 {
@@ -800,7 +803,7 @@ double* QR_WY_tiled(double* A, const int N, const int b1, const int b2)
             }
         }
 
-        // * Преобразование остальной части матрицы A:
+        // * \CF\F0\E5\EE\E1\F0\E0\E7\EE\E2\E0\ED\E8\E5 \EE\F1\F2\E0\EB\FC\ED\EE\E9 \F7\E0\F1\F2\E8 \EC\E0\F2\F0\E8\F6\FB A:
         // A(lamda:M-1, t:N-1) = (I + W*(Y^t))^t * A(lamda:M-1, t:N-1) (==)
         // (==) A(lamda:M-1, t:N-1) + [Y*(W^t)] * A(lamda:M-1, t:N-1)
 
@@ -861,7 +864,7 @@ double* QR_WY_tiled(double* A, const int N, const int b1, const int b2)
             A_shifted_pre_copy += N;
         }
 
-        // Умножение A(lamda:N-1, t:N-1) += (Y * W^t) * A(lamda:N-1, t:N-1)
+        // \D3\EC\ED\EE\E6\E5\ED\E8\E5 A(lamda:N-1, t:N-1) += (Y * W^t) * A(lamda:N-1, t:N-1)
 #pragma omp parallel for schedule(dynamic, 1)
         for (int ib = 0; ib < col_b_count; ++ib)
         {
@@ -911,7 +914,7 @@ double* QR_WY_tiled(double* A, const int N, const int b1, const int b2)
             }
         }
                 
-        // копирование преобразованной части матрицы A
+        // \EA\EE\EF\E8\F0\EE\E2\E0\ED\E8\E5 \EF\F0\E5\EE\E1\F0\E0\E7\EE\E2\E0\ED\ED\EE\E9 \F7\E0\F1\F2\E8 \EC\E0\F2\F0\E8\F6\FB A
         double* A_shifted_post_copy = A + lambda * N + t;
         const double* Abuf_shifted_post_copy = Abuf + lambda * N + t;
         for (int i = lambda; i < N; ++i)
@@ -991,8 +994,8 @@ double* QR_WY_double_tiled(double* A,
 
             // Shift for 'lambda+it'-th element of matrix column
             const int full_shift = lambda + it;
-            // Индекс большого блока, содержащего 'lambda+it'-ый диагональный элемент,
-            // считая от блока, содержащего 'lambda'-ый элемент
+            // \C8\ED\E4\E5\EA\F1 \E1\EE\EB\FC\F8\EE\E3\EE \E1\EB\EE\EA\E0, \F1\EE\E4\E5\F0\E6\E0\F9\E5\E3\EE 'lambda+it'-\FB\E9 \E4\E8\E0\E3\EE\ED\E0\EB\FC\ED\FB\E9 \FD\EB\E5\EC\E5\ED\F2,
+            // \F1\F7\E8\F2\E0\FF \EE\F2 \E1\EB\EE\EA\E0, \F1\EE\E4\E5\F0\E6\E0\F9\E5\E3\EE 'lambda'-\FB\E9 \FD\EB\E5\EC\E5\ED\F2
             const int b_begin = (full_shift - d1_shift) / b1;
             // Index of small-block-column,
             // which contains 'lambda+it'-th column
@@ -1013,7 +1016,7 @@ double* QR_WY_double_tiled(double* A,
             const double A_diag_el = A[full_shift*N + full_shift];
             const double A_diag_el_sign = (A_diag_el < 0) ? -1 : 1;
             double beta = A_diag_el + A_diag_el_sign * sqrt(norm);
-            // используется нормировка, т.ч. v[it] = 1
+            // \E8\F1\EF\EE\EB\FC\E7\F3\E5\F2\F1\FF \ED\EE\F0\EC\E8\F0\EE\E2\EA\E0, \F2.\F7. v[it] = 1
             double* v_shifted_NORM = v + full_shift + 1;
             for (int j = 0; j < N-full_shift-1; ++j)
             {
@@ -1135,8 +1138,8 @@ double* QR_WY_double_tiled(double* A,
                 }
             }
 
-            // * Заполнение поддиагнальной части it-го столбца матрицы A
-            //   информативной частью вектора Хаусхолдера
+            // * \C7\E0\EF\EE\EB\ED\E5\ED\E8\E5 \EF\EE\E4\E4\E8\E0\E3\ED\E0\EB\FC\ED\EE\E9 \F7\E0\F1\F2\E8 it-\E3\EE \F1\F2\EE\EB\E1\F6\E0 \EC\E0\F2\F0\E8\F6\FB A
+            //   \E8\ED\F4\EE\F0\EC\E0\F2\E8\E2\ED\EE\E9 \F7\E0\F1\F2\FC\FE \E2\E5\EA\F2\EE\F0\E0 \D5\E0\F3\F1\F5\EE\EB\E4\E5\F0\E0
             double* A_shifted_fill = A + (full_shift + 1)*N + full_shift;
             const double* v_shifted_fill = v + full_shift + 1;
             for (int j = full_shift + 1; j < N; ++j)
@@ -1160,7 +1163,7 @@ double* QR_WY_double_tiled(double* A,
             const int b_begin = (full_shift - d1_shift) / b1;
             const int dblock_col_index = it / db2;
 
-            // Вычисление нормы и ск. произведения вектора Хаусхолдера
+            // \C2\FB\F7\E8\F1\EB\E5\ED\E8\E5 \ED\EE\F0\EC\FB \E8 \F1\EA. \EF\F0\EE\E8\E7\E2\E5\E4\E5\ED\E8\FF \E2\E5\EA\F2\EE\F0\E0 \D5\E0\F3\F1\F5\EE\EB\E4\E5\F0\E0
             double scalar = 1.0;
             double* A_shifted_HV = A + (full_shift + 1)*N + full_shift;
             double* v_shifted_HV = v + full_shift + 1;
@@ -1547,19 +1550,19 @@ double* QR_WY_standard(double* A, const int N, const int r)
     double* WY   = Y + N * r;
     double* Abuf = WY + N * N;
 
-    // lambda указывает на начало текущего блока
+    // lambda \F3\EA\E0\E7\FB\E2\E0\E5\F2 \ED\E0 \ED\E0\F7\E0\EB\EE \F2\E5\EA\F3\F9\E5\E3\EE \E1\EB\EE\EA\E0
     for (int lambda = 0; lambda < N; lambda += r)
     {
-        // Указывает на начало следующего блока за текущим
+        // \D3\EA\E0\E7\FB\E2\E0\E5\F2 \ED\E0 \ED\E0\F7\E0\EB\EE \F1\EB\E5\E4\F3\FE\F9\E5\E3\EE \E1\EB\EE\EA\E0 \E7\E0 \F2\E5\EA\F3\F9\E8\EC
         const int t = min(lambda + r, N);
 
-        // Выполнение преобразований над текущим блоком
+        // \C2\FB\EF\EE\EB\ED\E5\ED\E8\E5 \EF\F0\E5\EE\E1\F0\E0\E7\EE\E2\E0\ED\E8\E9 \ED\E0\E4 \F2\E5\EA\F3\F9\E8\EC \E1\EB\EE\EA\EE\EC
         for (int it = lambda; it < t; ++it)
         {
             double norm = 0.0;
             double scalar = 1.0;
             double buf;
-            // * Вычисление вектора Хаусхолдера
+            // * \C2\FB\F7\E8\F1\EB\E5\ED\E8\E5 \E2\E5\EA\F2\EE\F0\E0 \D5\E0\F3\F1\F5\EE\EB\E4\E5\F0\E0
             for (int j = it; j < N; ++j)
             {
                 buf = A[j*N + it];
@@ -1569,7 +1572,7 @@ double* QR_WY_standard(double* A, const int N, const int r)
             const double A_diag_el = A[it * N + it];
             const double diag_el_sign = (A_diag_el < 0) ? -1 : 1;
             double beta = A_diag_el + diag_el_sign * sqrt(norm);
-            // используется нормировка, т.ч. v[it] = 1
+            // \E8\F1\EF\EE\EB\FC\E7\F3\E5\F2\F1\FF \ED\EE\F0\EC\E8\F0\EE\E2\EA\E0, \F2.\F7. v[it] = 1
             for (int j = it + 1; j < N; ++j)
             {
                 buf = (v[j] /= beta);
@@ -1577,10 +1580,10 @@ double* QR_WY_standard(double* A, const int N, const int r)
             }
             v[it] = 1.0;
 
-            // * Применение преобразования
+            // * \CF\F0\E8\EC\E5\ED\E5\ED\E8\E5 \EF\F0\E5\EE\E1\F0\E0\E7\EE\E2\E0\ED\E8\FF
             beta = -2.0 / scalar;
-            // Вычисление вектора w = beta * (A(:,lambda:t-1)^t) * v .
-            // начинаем с it, т.к. it-ая матрица Хаусхолдера действует на матрицу A(it:,it:)
+            // \C2\FB\F7\E8\F1\EB\E5\ED\E8\E5 \E2\E5\EA\F2\EE\F0\E0 w = beta * (A(:,lambda:t-1)^t) * v .
+            // \ED\E0\F7\E8\ED\E0\E5\EC \F1 it, \F2.\EA. it-\E0\FF \EC\E0\F2\F0\E8\F6\E0 \D5\E0\F3\F1\F5\EE\EB\E4\E5\F0\E0 \E4\E5\E9\F1\F2\E2\F3\E5\F2 \ED\E0 \EC\E0\F2\F0\E8\F6\F3 A(it:,it:)
             for (int j = it; j < t; ++j)    
             {
                 double sum = 0.0;
@@ -1590,7 +1593,7 @@ double* QR_WY_standard(double* A, const int N, const int r)
                 }
                 w[j-it] = beta * sum;
             }
-            // Преобразование текущего блока матрицы A
+            // \CF\F0\E5\EE\E1\F0\E0\E7\EE\E2\E0\ED\E8\E5 \F2\E5\EA\F3\F9\E5\E3\EE \E1\EB\EE\EA\E0 \EC\E0\F2\F0\E8\F6\FB A
             for (int j = it; j < N; ++j)
             {
                 double* Aj = A + j*N;
@@ -1601,15 +1604,15 @@ double* QR_WY_standard(double* A, const int N, const int r)
                 }
             }
 
-            // * Заполнение поддиагнальной части it-го столбца матрицы A
-            //   информативной частью вектора Хаусхолдера
+            // * \C7\E0\EF\EE\EB\ED\E5\ED\E8\E5 \EF\EE\E4\E4\E8\E0\E3\ED\E0\EB\FC\ED\EE\E9 \F7\E0\F1\F2\E8 it-\E3\EE \F1\F2\EE\EB\E1\F6\E0 \EC\E0\F2\F0\E8\F6\FB A
+            //   \E8\ED\F4\EE\F0\EC\E0\F2\E8\E2\ED\EE\E9 \F7\E0\F1\F2\FC\FE \E2\E5\EA\F2\EE\F0\E0 \D5\E0\F3\F1\F5\EE\EB\E4\E5\F0\E0
             for (int j = it + 1; j < N; ++j)
             {
                 A[j*N + it] = v[j];
             }
         }// FOR
         
-        // * Вычисление WY-представления произведения матриц Хаусхолдера
+        // * \C2\FB\F7\E8\F1\EB\E5\ED\E8\E5 WY-\EF\F0\E5\E4\F1\F2\E0\E2\EB\E5\ED\E8\FF \EF\F0\EE\E8\E7\E2\E5\E4\E5\ED\E8\FF \EC\E0\F2\F0\E8\F6 \D5\E0\F3\F1\F5\EE\EB\E4\E5\F0\E0
         const int d = t - lambda;
         memset(Y + lambda*r, 0, r * min(N - lambda, r) * sizeof(double));
         for (int it = 0; it < d; ++it)
@@ -1617,7 +1620,7 @@ double* QR_WY_standard(double* A, const int N, const int r)
             const int shift = lambda + it;
             double scalar = 1.0, buf;
             memset(v + lambda, 0, it*sizeof(double));
-            // * Вычисление нормы и ск. произведения вектора Хаусхолдера
+            // * \C2\FB\F7\E8\F1\EB\E5\ED\E8\E5 \ED\EE\F0\EC\FB \E8 \F1\EA. \EF\F0\EE\E8\E7\E2\E5\E4\E5\ED\E8\FF \E2\E5\EA\F2\EE\F0\E0 \D5\E0\F3\F1\F5\EE\EB\E4\E5\F0\E0
             for (int j = shift + 1; j < N; ++j)
             {
                 buf = A[j*N + shift];
@@ -1627,12 +1630,12 @@ double* QR_WY_standard(double* A, const int N, const int r)
             v[shift] = 1.0;
             double beta = -2.0 / scalar;
 
-            // it - число накопленных столбцов в матрицах W и Y (= номеру дозаписываемого столбца)
+            // it - \F7\E8\F1\EB\EE \ED\E0\EA\EE\EF\EB\E5\ED\ED\FB\F5 \F1\F2\EE\EB\E1\F6\EE\E2 \E2 \EC\E0\F2\F0\E8\F6\E0\F5 W \E8 Y (= \ED\EE\EC\E5\F0\F3 \E4\EE\E7\E0\EF\E8\F1\FB\E2\E0\E5\EC\EE\E3\EE \F1\F2\EE\EB\E1\F6\E0)
             if (it == 0)
             {
-                // Начальное заполнение первого столбца
-                // замечание: первые lambda строк матриц W и Y - нулевые,
-                //            матрицы имеют ступенчатый вид.
+                // \CD\E0\F7\E0\EB\FC\ED\EE\E5 \E7\E0\EF\EE\EB\ED\E5\ED\E8\E5 \EF\E5\F0\E2\EE\E3\EE \F1\F2\EE\EB\E1\F6\E0
+                // \E7\E0\EC\E5\F7\E0\ED\E8\E5: \EF\E5\F0\E2\FB\E5 lambda \F1\F2\F0\EE\EA \EC\E0\F2\F0\E8\F6 W \E8 Y - \ED\F3\EB\E5\E2\FB\E5,
+                //            \EC\E0\F2\F0\E8\F6\FB \E8\EC\E5\FE\F2 \F1\F2\F3\EF\E5\ED\F7\E0\F2\FB\E9 \E2\E8\E4.
                 for (int i = lambda; i < N; ++i)
                 {
                     Y[i*r] = v[i];
@@ -1641,7 +1644,7 @@ double* QR_WY_standard(double* A, const int N, const int r)
             }
             else
             {
-                // Вычисление произведения (Y^t) * v
+                // \C2\FB\F7\E8\F1\EB\E5\ED\E8\E5 \EF\F0\EE\E8\E7\E2\E5\E4\E5\ED\E8\FF (Y^t) * v
                 for (int i = 0; i < it; ++i)
                 {
                     double sum = 0.0;
@@ -1652,7 +1655,7 @@ double* QR_WY_standard(double* A, const int N, const int r)
                     w[i] = sum;
                 }
 
-                // Вычисление произведения W * ((Y^t) * v)
+                // \C2\FB\F7\E8\F1\EB\E5\ED\E8\E5 \EF\F0\EE\E8\E7\E2\E5\E4\E5\ED\E8\FF W * ((Y^t) * v)
                 for (int i = lambda; i < N; ++i)
                 {
                     double* Wi = W + i*r;
@@ -1669,11 +1672,11 @@ double* QR_WY_standard(double* A, const int N, const int r)
             }
         }
 
-        // * Преобразование остальной части матрицы A:
+        // * \CF\F0\E5\EE\E1\F0\E0\E7\EE\E2\E0\ED\E8\E5 \EE\F1\F2\E0\EB\FC\ED\EE\E9 \F7\E0\F1\F2\E8 \EC\E0\F2\F0\E8\F6\FB A:
         // A(lamda:M-1, t:N-1) = (I + W*(Y^t))^t * A(lamda:M-1, t:N-1) (==)
         // (==) A(lamda:M-1, t:N-1) + [Y*(W^t)] * A(lamda:M-1, t:N-1)
         
-        // Умножение Y * W^t
+        // \D3\EC\ED\EE\E6\E5\ED\E8\E5 Y * W^t
 #pragma omp parallel for schedule(dynamic, 1)
         for (int i = lambda; i < N; ++i)
         {
@@ -1691,7 +1694,7 @@ double* QR_WY_standard(double* A, const int N, const int r)
             }
         }
 
-        // Умножение A(lamda:M-1, t:N-1) += (Y * W^t) * A(lamda:M-1, t:N-1)
+        // \D3\EC\ED\EE\E6\E5\ED\E8\E5 A(lamda:M-1, t:N-1) += (Y * W^t) * A(lamda:M-1, t:N-1)
 #pragma omp parallel for schedule(dynamic, 1)
         for (int i = lambda; i < N; ++i)
         {
@@ -1709,7 +1712,7 @@ double* QR_WY_standard(double* A, const int N, const int r)
             }
         }
 
-        // копирование преобразованной части матрицы A
+        // \EA\EE\EF\E8\F0\EE\E2\E0\ED\E8\E5 \EF\F0\E5\EE\E1\F0\E0\E7\EE\E2\E0\ED\ED\EE\E9 \F7\E0\F1\F2\E8 \EC\E0\F2\F0\E8\F6\FB A
         for (int i = lambda; i < N; ++i)
         {
             memcpy(A + i*N + t,
@@ -1740,54 +1743,54 @@ double* QR_WY_block(double* A, const int N, const int b1, const int b2)
 
     int curr_i_block_ind = -1;
     int curr_j_block_ind = -1;
-    // lambda указывает на начало текущего блока
+    // lambda \F3\EA\E0\E7\FB\E2\E0\E5\F2 \ED\E0 \ED\E0\F7\E0\EB\EE \F2\E5\EA\F3\F9\E5\E3\EE \E1\EB\EE\EA\E0
     for (int lambda = 0; lambda < N; lambda += b2)
     {
-        // координаты блока, в котором находится элемент (lambda,lambda).
-        // замечание: i-координата может измениться из-за разных размеров b1 и b2 блоков. 
+        // \EA\EE\EE\F0\E4\E8\ED\E0\F2\FB \E1\EB\EE\EA\E0, \E2 \EA\EE\F2\EE\F0\EE\EC \ED\E0\F5\EE\E4\E8\F2\F1\FF \FD\EB\E5\EC\E5\ED\F2 (lambda,lambda).
+        // \E7\E0\EC\E5\F7\E0\ED\E8\E5: i-\EA\EE\EE\F0\E4\E8\ED\E0\F2\E0 \EC\EE\E6\E5\F2 \E8\E7\EC\E5\ED\E8\F2\FC\F1\FF \E8\E7-\E7\E0 \F0\E0\E7\ED\FB\F5 \F0\E0\E7\EC\E5\F0\EE\E2 b1 \E8 b2 \E1\EB\EE\EA\EE\E2. 
         curr_i_block_ind = lambda / b1;
         ++curr_j_block_ind;
 
-        // Указывает на начало следующего по горизонтали блока
+        // \D3\EA\E0\E7\FB\E2\E0\E5\F2 \ED\E0 \ED\E0\F7\E0\EB\EE \F1\EB\E5\E4\F3\FE\F9\E5\E3\EE \EF\EE \E3\EE\F0\E8\E7\EE\ED\F2\E0\EB\E8 \E1\EB\EE\EA\E0
         const int t = min(lambda + b2, N);
-        // оставшееся число блоков справа от текущего по строке
+        // \EE\F1\F2\E0\E2\F8\E5\E5\F1\FF \F7\E8\F1\EB\EE \E1\EB\EE\EA\EE\E2 \F1\EF\F0\E0\E2\E0 \EE\F2 \F2\E5\EA\F3\F9\E5\E3\EE \EF\EE \F1\F2\F0\EE\EA\E5
         const int row_b_count = block_count_in_row - curr_j_block_ind - 1;
-        // оставшееся число блоков включая текущий и ниже по столбцу
+        // \EE\F1\F2\E0\E2\F8\E5\E5\F1\FF \F7\E8\F1\EB\EE \E1\EB\EE\EA\EE\E2 \E2\EA\EB\FE\F7\E0\FF \F2\E5\EA\F3\F9\E8\E9 \E8 \ED\E8\E6\E5 \EF\EE \F1\F2\EE\EB\E1\F6\F3
         const int col_b_count = block_count_in_col - curr_i_block_ind;
-        // сдвиги по вертикали и горизонтали до текущего блока
+        // \F1\E4\E2\E8\E3\E8 \EF\EE \E2\E5\F0\F2\E8\EA\E0\EB\E8 \E8 \E3\EE\F0\E8\E7\EE\ED\F2\E0\EB\E8 \E4\EE \F2\E5\EA\F3\F9\E5\E3\EE \E1\EB\EE\EA\E0
         const int d1_shift = curr_i_block_ind * b1;
         const int d2_shift = curr_j_block_ind * b2;
 
-        // действительная величина ширины текущего блочного столбца
+        // \E4\E5\E9\F1\F2\E2\E8\F2\E5\EB\FC\ED\E0\FF \E2\E5\EB\E8\F7\E8\ED\E0 \F8\E8\F0\E8\ED\FB \F2\E5\EA\F3\F9\E5\E3\EE \E1\EB\EE\F7\ED\EE\E3\EE \F1\F2\EE\EB\E1\F6\E0
         const int d2 = t - lambda;
         
-        // * Выполнение преобразований над текущим блочным столбцом
+        // * \C2\FB\EF\EE\EB\ED\E5\ED\E8\E5 \EF\F0\E5\EE\E1\F0\E0\E7\EE\E2\E0\ED\E8\E9 \ED\E0\E4 \F2\E5\EA\F3\F9\E8\EC \E1\EB\EE\F7\ED\FB\EC \F1\F2\EE\EB\E1\F6\EE\EC
         for (int it = 0; it < d2; ++it)
         {
-            // сдвиг до 'lambda+it'-го элемнта в столбце
+            // \F1\E4\E2\E8\E3 \E4\EE 'lambda+it'-\E3\EE \FD\EB\E5\EC\ED\F2\E0 \E2 \F1\F2\EE\EB\E1\F6\E5
             const int full_shift = lambda + it;
-            // фиксация перехода в следующий по вертикали блок
+            // \F4\E8\EA\F1\E0\F6\E8\FF \EF\E5\F0\E5\F5\EE\E4\E0 \E2 \F1\EB\E5\E4\F3\FE\F9\E8\E9 \EF\EE \E2\E5\F0\F2\E8\EA\E0\EB\E8 \E1\EB\EE\EA
             const int b_begin = (full_shift - d1_shift) / b1;
 
             memset(w, 0, d2 * sizeof(double));
             memset(v + lambda, 0, it * sizeof(double));
             
-            // * Вычисление вектора Хаусхолдера
+            // * \C2\FB\F7\E8\F1\EB\E5\ED\E8\E5 \E2\E5\EA\F2\EE\F0\E0 \D5\E0\F3\F1\F5\EE\EB\E4\E5\F0\E0
             double norm = 0.0;
             for (int jb = b_begin; jb < col_b_count; ++jb)
             {
-                // сдвиг линии блока от линии матрицы
+                // \F1\E4\E2\E8\E3 \EB\E8\ED\E8\E8 \E1\EB\EE\EA\E0 \EE\F2 \EB\E8\ED\E8\E8 \EC\E0\F2\F0\E8\F6\FB
                 const int mb_shift = d1_shift + jb * b1;
-                // верхняя и нижняя границы чтения строк в блоке jb (локальная нумерация)
+                // \E2\E5\F0\F5\ED\FF\FF \E8 \ED\E8\E6\ED\FF\FF \E3\F0\E0\ED\E8\F6\FB \F7\F2\E5\ED\E8\FF \F1\F2\F0\EE\EA \E2 \E1\EB\EE\EA\E5 jb (\EB\EE\EA\E0\EB\FC\ED\E0\FF \ED\F3\EC\E5\F0\E0\F6\E8\FF)
                 const int j_lb = max(full_shift, mb_shift) - mb_shift;
                 const int j_ub = min(mb_shift + b1, N) - mb_shift;
-                // высота блока jb
+                // \E2\FB\F1\EE\F2\E0 \E1\EB\EE\EA\E0 jb
                 const int block_h = min(b1, N - mb_shift);
-                // указатель на 'it'-ый элемент 'j_lb'-ой строки блока 'jb'
+                // \F3\EA\E0\E7\E0\F2\E5\EB\FC \ED\E0 'it'-\FB\E9 \FD\EB\E5\EC\E5\ED\F2 'j_lb'-\EE\E9 \F1\F2\F0\EE\EA\E8 \E1\EB\EE\EA\E0 'jb'
                 const double* Ablock_shifted = A + mb_shift*N +
                     block_h*d2_shift + j_lb*d2 + it;
                 double* v_shifted = v + mb_shift + j_lb;
-                // j - номер строки в блоке jb (локальная нумерация)
+                // j - \ED\EE\EC\E5\F0 \F1\F2\F0\EE\EA\E8 \E2 \E1\EB\EE\EA\E5 jb (\EB\EE\EA\E0\EB\FC\ED\E0\FF \ED\F3\EC\E5\F0\E0\F6\E8\FF)
                 for (int j = 0; j < j_ub - j_lb; ++j)
                 {
                     double buf = *Ablock_shifted;
@@ -1802,7 +1805,7 @@ double* QR_WY_block(double* A, const int N, const int b1, const int b2)
                 d2_shift*diag_el_block_h + (full_shift % b1)*d2 + it);
             const double diag_el_sign = (A_diag_el < 0) ? -1 : 1;
             double beta = A_diag_el + diag_el_sign * sqrt(norm);
-            // используется нормировка, т.ч. v[it] = 1
+            // \E8\F1\EF\EE\EB\FC\E7\F3\E5\F2\F1\FF \ED\EE\F0\EC\E8\F0\EE\E2\EA\E0, \F2.\F7. v[it] = 1
             double scalar = 1.0;
             for (int j = full_shift + 1; j < N; ++j)
             {
@@ -1812,28 +1815,28 @@ double* QR_WY_block(double* A, const int N, const int b1, const int b2)
             v[full_shift] = 1.0;
             beta = -2.0 / scalar;
         
-            // * Применение преобразования
-            // Вычисление вектора w = beta * (A(:,lambda:t-1)^t) * v .
-            // Начинаем с it, т.к. it-ая матрица Хаусхолдера действует на матрицу A(it:,it:)
+            // * \CF\F0\E8\EC\E5\ED\E5\ED\E8\E5 \EF\F0\E5\EE\E1\F0\E0\E7\EE\E2\E0\ED\E8\FF
+            // \C2\FB\F7\E8\F1\EB\E5\ED\E8\E5 \E2\E5\EA\F2\EE\F0\E0 w = beta * (A(:,lambda:t-1)^t) * v .
+            // \CD\E0\F7\E8\ED\E0\E5\EC \F1 it, \F2.\EA. it-\E0\FF \EC\E0\F2\F0\E8\F6\E0 \D5\E0\F3\F1\F5\EE\EB\E4\E5\F0\E0 \E4\E5\E9\F1\F2\E2\F3\E5\F2 \ED\E0 \EC\E0\F2\F0\E8\F6\F3 A(it:,it:)
             for (int kb = b_begin; kb < col_b_count; ++kb)
             {
-                // сдвиг линии блока от линии матрицы
+                // \F1\E4\E2\E8\E3 \EB\E8\ED\E8\E8 \E1\EB\EE\EA\E0 \EE\F2 \EB\E8\ED\E8\E8 \EC\E0\F2\F0\E8\F6\FB
                 const int mb_shift = d1_shift + kb * b1;
-                // верхняя и нижняя границы чтения строк в блоке jb (локальная нумерация)
+                // \E2\E5\F0\F5\ED\FF\FF \E8 \ED\E8\E6\ED\FF\FF \E3\F0\E0\ED\E8\F6\FB \F7\F2\E5\ED\E8\FF \F1\F2\F0\EE\EA \E2 \E1\EB\EE\EA\E5 jb (\EB\EE\EA\E0\EB\FC\ED\E0\FF \ED\F3\EC\E5\F0\E0\F6\E8\FF)
                 const int k_lb = max(full_shift, mb_shift) - mb_shift;
                 const int k_ub = min(mb_shift + b1, N) - mb_shift;
                 const int k_iter_count = k_ub - k_lb;
-                // Величины сдвигов указателей на 'A' и на 'v'
-                // с возвратом их на исходные позиции
-                // для выполнения очереной итерации умножения
+                // \C2\E5\EB\E8\F7\E8\ED\FB \F1\E4\E2\E8\E3\EE\E2 \F3\EA\E0\E7\E0\F2\E5\EB\E5\E9 \ED\E0 'A' \E8 \ED\E0 'v'
+                // \F1 \E2\EE\E7\E2\F0\E0\F2\EE\EC \E8\F5 \ED\E0 \E8\F1\F5\EE\E4\ED\FB\E5 \EF\EE\E7\E8\F6\E8\E8
+                // \E4\EB\FF \E2\FB\EF\EE\EB\ED\E5\ED\E8\FF \EE\F7\E5\F0\E5\ED\EE\E9 \E8\F2\E5\F0\E0\F6\E8\E8 \F3\EC\ED\EE\E6\E5\ED\E8\FF
                 const int A_diff_val = k_iter_count * d2 - 1;
-                // высота блока jb
+                // \E2\FB\F1\EE\F2\E0 \E1\EB\EE\EA\E0 jb
                 const int block_h = min(b1, N - mb_shift);
-                // указатель на начало блока jb
+                // \F3\EA\E0\E7\E0\F2\E5\EB\FC \ED\E0 \ED\E0\F7\E0\EB\EE \E1\EB\EE\EA\E0 jb
                 const double* Ablock_shifted = A + mb_shift*N +
                     block_h*d2_shift + k_lb*d2 + it;
                 const double* v_shifted = v + mb_shift + k_lb;
-                // j - номер столбца в блоке kb (локальная нумерация)
+                // j - \ED\EE\EC\E5\F0 \F1\F2\EE\EB\E1\F6\E0 \E2 \E1\EB\EE\EA\E5 kb (\EB\EE\EA\E0\EB\FC\ED\E0\FF \ED\F3\EC\E5\F0\E0\F6\E8\FF)
                 for (int j = it; j < d2; ++j)
                 {
                     double sum = 0.0;
@@ -1852,27 +1855,27 @@ double* QR_WY_block(double* A, const int N, const int b1, const int b2)
                 w[k] *= beta;
             }
 
-            // Преобразование текущего блока матрицы A
+            // \CF\F0\E5\EE\E1\F0\E0\E7\EE\E2\E0\ED\E8\E5 \F2\E5\EA\F3\F9\E5\E3\EE \E1\EB\EE\EA\E0 \EC\E0\F2\F0\E8\F6\FB A
             const double* w_shifted_TRANSF = w + it;
             const int w_diff_val_TRANSF = d2 - it;
             for (int jb = b_begin; jb < col_b_count; ++jb)
             {
-                // сдвиг линии блока от линии матрицы
+                // \F1\E4\E2\E8\E3 \EB\E8\ED\E8\E8 \E1\EB\EE\EA\E0 \EE\F2 \EB\E8\ED\E8\E8 \EC\E0\F2\F0\E8\F6\FB
                 const int mb_shift = d1_shift + jb*b1;
-                // верхняя и нижняя границы чтения строк в блоке jb (локальная нумерация)
+                // \E2\E5\F0\F5\ED\FF\FF \E8 \ED\E8\E6\ED\FF\FF \E3\F0\E0\ED\E8\F6\FB \F7\F2\E5\ED\E8\FF \F1\F2\F0\EE\EA \E2 \E1\EB\EE\EA\E5 jb (\EB\EE\EA\E0\EB\FC\ED\E0\FF \ED\F3\EC\E5\F0\E0\F6\E8\FF)
                 const int j_lb = max(full_shift, mb_shift) - mb_shift;
                 const int j_ub = min(mb_shift + b1, N) - mb_shift;
-                // высота блока jb
+                // \E2\FB\F1\EE\F2\E0 \E1\EB\EE\EA\E0 jb
                 const int j_block_h = min(b1, N - mb_shift);
-                // указатель на 'it'-ый элемент 'j_lb'-ой строки блока 'jb'
+                // \F3\EA\E0\E7\E0\F2\E5\EB\FC \ED\E0 'it'-\FB\E9 \FD\EB\E5\EC\E5\ED\F2 'j_lb'-\EE\E9 \F1\F2\F0\EE\EA\E8 \E1\EB\EE\EA\E0 'jb'
                 double* Arow_shifted = A + mb_shift*N +
                     j_block_h*d2_shift + j_lb*d2 + it;
                 const double* v_shifted = v + mb_shift + j_lb;
-                // j - номер строки в блоке jb (локальная нумерация)
+                // j - \ED\EE\EC\E5\F0 \F1\F2\F0\EE\EA\E8 \E2 \E1\EB\EE\EA\E5 jb (\EB\EE\EA\E0\EB\FC\ED\E0\FF \ED\F3\EC\E5\F0\E0\F6\E8\FF)
                 for (int j = 0; j < j_ub - j_lb; ++j)
                 {
                     const double vj = v_shifted[j];
-                    // k - номер столбца в блоке jb (локальная нумерация)
+                    // k - \ED\EE\EC\E5\F0 \F1\F2\EE\EB\E1\F6\E0 \E2 \E1\EB\EE\EA\E5 jb (\EB\EE\EA\E0\EB\FC\ED\E0\FF \ED\F3\EC\E5\F0\E0\F6\E8\FF)
                     for (int k = 0; k < w_diff_val_TRANSF; ++k)
                     {
                         (*Arow_shifted++) += vj * (*w_shifted_TRANSF++);
@@ -1882,23 +1885,23 @@ double* QR_WY_block(double* A, const int N, const int b1, const int b2)
                 }
             }
             
-            // * Заполнение поддиагнальной части 'it'-го столбца матрицы 'A'
-            //   информативной частью вектора Хаусхолдера
+            // * \C7\E0\EF\EE\EB\ED\E5\ED\E8\E5 \EF\EE\E4\E4\E8\E0\E3\ED\E0\EB\FC\ED\EE\E9 \F7\E0\F1\F2\E8 'it'-\E3\EE \F1\F2\EE\EB\E1\F6\E0 \EC\E0\F2\F0\E8\F6\FB 'A'
+            //   \E8\ED\F4\EE\F0\EC\E0\F2\E8\E2\ED\EE\E9 \F7\E0\F1\F2\FC\FE \E2\E5\EA\F2\EE\F0\E0 \D5\E0\F3\F1\F5\EE\EB\E4\E5\F0\E0
             const int b_inc_begin = (full_shift+1 - curr_i_block_ind*b1) / b1;
             for (int jb = b_inc_begin; jb < col_b_count; ++jb)
             {
-                // сдвиг линии блока от линии матрицы
+                // \F1\E4\E2\E8\E3 \EB\E8\ED\E8\E8 \E1\EB\EE\EA\E0 \EE\F2 \EB\E8\ED\E8\E8 \EC\E0\F2\F0\E8\F6\FB
                 const int mb_shift = d1_shift + jb*b1;
-                // верхняя и нижняя границы чтения строк в блоке jb (локальная нумерация)
+                // \E2\E5\F0\F5\ED\FF\FF \E8 \ED\E8\E6\ED\FF\FF \E3\F0\E0\ED\E8\F6\FB \F7\F2\E5\ED\E8\FF \F1\F2\F0\EE\EA \E2 \E1\EB\EE\EA\E5 jb (\EB\EE\EA\E0\EB\FC\ED\E0\FF \ED\F3\EC\E5\F0\E0\F6\E8\FF)
                 const int j_lb = max(full_shift+1, mb_shift) - mb_shift;
                 const int j_ub = min(mb_shift + b1, N) - mb_shift;
-                // высота блока jb
+                // \E2\FB\F1\EE\F2\E0 \E1\EB\EE\EA\E0 jb
                 const int j_block_h = min(b1, N - mb_shift);
-                // указатель на начало блока jb
+                // \F3\EA\E0\E7\E0\F2\E5\EB\FC \ED\E0 \ED\E0\F7\E0\EB\EE \E1\EB\EE\EA\E0 jb
                 double* Ablock_shifted = A + mb_shift*N +
                     j_block_h*d2_shift + j_lb*d2 + it;
                 const double* v_shifted = v + mb_shift + j_lb;
-                // j - номер строки в блоке jb (локальная нумерация)
+                // j - \ED\EE\EC\E5\F0 \F1\F2\F0\EE\EA\E8 \E2 \E1\EB\EE\EA\E5 jb (\EB\EE\EA\E0\EB\FC\ED\E0\FF \ED\F3\EC\E5\F0\E0\F6\E8\FF)
                 for (int j = 0; j < j_ub - j_lb; ++j)
                 {
                     *Ablock_shifted = v_shifted[j];
@@ -1910,33 +1913,33 @@ double* QR_WY_block(double* A, const int N, const int b1, const int b2)
         memset(W + lambda*b2, 0, (N - lambda)*b2*sizeof(double));
         memset(Y + lambda*b2, 0, (N - lambda)*b2*sizeof(double));
 
-        // * Вычисление WY-представления произведения матриц Хаусхолдера
+        // * \C2\FB\F7\E8\F1\EB\E5\ED\E8\E5 WY-\EF\F0\E5\E4\F1\F2\E0\E2\EB\E5\ED\E8\FF \EF\F0\EE\E8\E7\E2\E5\E4\E5\ED\E8\FF \EC\E0\F2\F0\E8\F6 \D5\E0\F3\F1\F5\EE\EB\E4\E5\F0\E0
         for (int it = 0; it < d2; ++it)
         {
-            // сдвиг до 'lambda+it'-го элемнта в столбце
+            // \F1\E4\E2\E8\E3 \E4\EE 'lambda+it'-\E3\EE \FD\EB\E5\EC\ED\F2\E0 \E2 \F1\F2\EE\EB\E1\F6\E5
             const int full_shift = lambda + it;
-            // фиксация перехода в следующий по вертикали блок
+            // \F4\E8\EA\F1\E0\F6\E8\FF \EF\E5\F0\E5\F5\EE\E4\E0 \E2 \F1\EB\E5\E4\F3\FE\F9\E8\E9 \EF\EE \E2\E5\F0\F2\E8\EA\E0\EB\E8 \E1\EB\EE\EA
             const int b_begin = (full_shift - d1_shift) / b1;
 
             memset(w, 0, d2*sizeof(double));
             memset(v + lambda, 0, it*sizeof(double));
 
             double scalar = 1.0, buf = 0.0;
-            // * Вычисление нормы и ск. произведения вектора Хаусхолдера
+            // * \C2\FB\F7\E8\F1\EB\E5\ED\E8\E5 \ED\EE\F0\EC\FB \E8 \F1\EA. \EF\F0\EE\E8\E7\E2\E5\E4\E5\ED\E8\FF \E2\E5\EA\F2\EE\F0\E0 \D5\E0\F3\F1\F5\EE\EB\E4\E5\F0\E0
             for (int jb = (full_shift+1 - d1_shift)/b1; jb < col_b_count; ++jb)
             {
-                // сдвиг линии блока от линии матрицы
+                // \F1\E4\E2\E8\E3 \EB\E8\ED\E8\E8 \E1\EB\EE\EA\E0 \EE\F2 \EB\E8\ED\E8\E8 \EC\E0\F2\F0\E8\F6\FB
                 const int mb_shift = d1_shift + jb * b1;
-                // верхняя и нижняя границы чтения строк в блоке jb (локальная нумерация)
+                // \E2\E5\F0\F5\ED\FF\FF \E8 \ED\E8\E6\ED\FF\FF \E3\F0\E0\ED\E8\F6\FB \F7\F2\E5\ED\E8\FF \F1\F2\F0\EE\EA \E2 \E1\EB\EE\EA\E5 jb (\EB\EE\EA\E0\EB\FC\ED\E0\FF \ED\F3\EC\E5\F0\E0\F6\E8\FF)
                 const int j_lb = max(full_shift+1, mb_shift) - mb_shift;
                 const int j_ub = min(mb_shift + b1, N) - mb_shift;
-                // высота блока jb
+                // \E2\FB\F1\EE\F2\E0 \E1\EB\EE\EA\E0 jb
                 const int block_h = min(b1, N - mb_shift);
-                // указатель на начало блока jb
+                // \F3\EA\E0\E7\E0\F2\E5\EB\FC \ED\E0 \ED\E0\F7\E0\EB\EE \E1\EB\EE\EA\E0 jb
                 const double* Arow_shifted = A + mb_shift*N +
                     block_h*d2_shift + j_lb*d2 + it;
                 double* v_shifted = v + mb_shift + j_lb;
-                // j - номер строки в блоке jb (локальная нумерация)
+                // j - \ED\EE\EC\E5\F0 \F1\F2\F0\EE\EA\E8 \E2 \E1\EB\EE\EA\E5 jb (\EB\EE\EA\E0\EB\FC\ED\E0\FF \ED\F3\EC\E5\F0\E0\F6\E8\FF)
                 for (int j = 0; j < j_ub - j_lb; ++j)
                 {
                     buf = *Arow_shifted;
@@ -1948,21 +1951,21 @@ double* QR_WY_block(double* A, const int N, const int b1, const int b2)
             v[full_shift] = 1.0;
             double beta = -2.0 / scalar;
             
-            // 'it' - число накопленных столбцов в матрицах 'W' и 'Y'
-            // (= номеру дописываемого столбца)
+            // 'it' - \F7\E8\F1\EB\EE \ED\E0\EA\EE\EF\EB\E5\ED\ED\FB\F5 \F1\F2\EE\EB\E1\F6\EE\E2 \E2 \EC\E0\F2\F0\E8\F6\E0\F5 'W' \E8 'Y'
+            // (= \ED\EE\EC\E5\F0\F3 \E4\EE\EF\E8\F1\FB\E2\E0\E5\EC\EE\E3\EE \F1\F2\EE\EB\E1\F6\E0)
             if (it == 0)
             {
-                // Начальное заполнение первого столбца
-                // замечание: первые 'lambda' строк матриц 'W' и 'Y' - нулевые,
-                //            матрица 'Y' имеет ступенчатый вид.
+                // \CD\E0\F7\E0\EB\FC\ED\EE\E5 \E7\E0\EF\EE\EB\ED\E5\ED\E8\E5 \EF\E5\F0\E2\EE\E3\EE \F1\F2\EE\EB\E1\F6\E0
+                // \E7\E0\EC\E5\F7\E0\ED\E8\E5: \EF\E5\F0\E2\FB\E5 'lambda' \F1\F2\F0\EE\EA \EC\E0\F2\F0\E8\F6 'W' \E8 'Y' - \ED\F3\EB\E5\E2\FB\E5,
+                //            \EC\E0\F2\F0\E8\F6\E0 'Y' \E8\EC\E5\E5\F2 \F1\F2\F3\EF\E5\ED\F7\E0\F2\FB\E9 \E2\E8\E4.
                 for (int ib = b_begin; ib < col_b_count; ++ib)
                 {
-                    // сдвиг линии блока от линии матрицы
+                    // \F1\E4\E2\E8\E3 \EB\E8\ED\E8\E8 \E1\EB\EE\EA\E0 \EE\F2 \EB\E8\ED\E8\E8 \EC\E0\F2\F0\E8\F6\FB
                     const int mb_shift = d1_shift + ib * b1;
-                    // верхняя и нижняя границы чтения строк в блоке ib (локальная нумерация)
+                    // \E2\E5\F0\F5\ED\FF\FF \E8 \ED\E8\E6\ED\FF\FF \E3\F0\E0\ED\E8\F6\FB \F7\F2\E5\ED\E8\FF \F1\F2\F0\EE\EA \E2 \E1\EB\EE\EA\E5 ib (\EB\EE\EA\E0\EB\FC\ED\E0\FF \ED\F3\EC\E5\F0\E0\F6\E8\FF)
                     const int i_lb = max(full_shift, mb_shift) - mb_shift;
                     const int i_ub = min(mb_shift + b1, N) - mb_shift;
-                    // указатели на начала блоков ib матриц Y и W
+                    // \F3\EA\E0\E7\E0\F2\E5\EB\E8 \ED\E0 \ED\E0\F7\E0\EB\E0 \E1\EB\EE\EA\EE\E2 ib \EC\E0\F2\F0\E8\F6 Y \E8 W
                     double* Yrow = Y + (mb_shift + i_lb)*b2;
                     double* Wrow = W + (Yrow - Y);
                     const double* v_shifted = v + mb_shift + i_lb;
@@ -1978,20 +1981,20 @@ double* QR_WY_block(double* A, const int N, const int b1, const int b2)
             }
             else
             {
-                // Вычисление произведения (Y^t) * v
+                // \C2\FB\F7\E8\F1\EB\E5\ED\E8\E5 \EF\F0\EE\E8\E7\E2\E5\E4\E5\ED\E8\FF (Y^t) * v
                 double* wp_Yv = w;
                 const int W_Y_diff_val = b2 - it;
                 for (int jb = b_begin; jb < col_b_count; ++jb)
                 {
-                    // сдвиг линии блока от линии матрицы
+                    // \F1\E4\E2\E8\E3 \EB\E8\ED\E8\E8 \E1\EB\EE\EA\E0 \EE\F2 \EB\E8\ED\E8\E8 \EC\E0\F2\F0\E8\F6\FB
                     const int mb_shift = d1_shift + jb * b1;
-                    // верхняя и нижняя границы чтения строк в блоке jb (глобальная нумерация)
+                    // \E2\E5\F0\F5\ED\FF\FF \E8 \ED\E8\E6\ED\FF\FF \E3\F0\E0\ED\E8\F6\FB \F7\F2\E5\ED\E8\FF \F1\F2\F0\EE\EA \E2 \E1\EB\EE\EA\E5 jb (\E3\EB\EE\E1\E0\EB\FC\ED\E0\FF \ED\F3\EC\E5\F0\E0\F6\E8\FF)
                     const int j_lb = max(full_shift, mb_shift);
                     const int j_ub = min(mb_shift + b1, N);
-                    // указатель на начало блока jb
+                    // \F3\EA\E0\E7\E0\F2\E5\EB\FC \ED\E0 \ED\E0\F7\E0\EB\EE \E1\EB\EE\EA\E0 jb
                     const double* Yrow = Y + j_lb*b2;
                     double* v_shifted = v + j_lb;
-                    // j - номер строки в блоке jb (глобальная нумерация)
+                    // j - \ED\EE\EC\E5\F0 \F1\F2\F0\EE\EA\E8 \E2 \E1\EB\EE\EA\E5 jb (\E3\EB\EE\E1\E0\EB\FC\ED\E0\FF \ED\F3\EC\E5\F0\E0\F6\E8\FF)
                     for (int j = j_lb; j < j_ub; ++j)
                     {
                         const double vj = *v_shifted++;
@@ -2004,16 +2007,16 @@ double* QR_WY_block(double* A, const int N, const int b1, const int b2)
                     }
                 }
                 
-                // Вычисление произведения W * ((Y^t) * v) <==> W * w
+                // \C2\FB\F7\E8\F1\EB\E5\ED\E8\E5 \EF\F0\EE\E8\E7\E2\E5\E4\E5\ED\E8\FF W * ((Y^t) * v) <==> W * w
                 const double* wp_Ww = w;
                 for (int ib = 0; ib < col_b_count; ++ib)
                 {
-                    // сдвиг линии блока от линии матрицы
+                    // \F1\E4\E2\E8\E3 \EB\E8\ED\E8\E8 \E1\EB\EE\EA\E0 \EE\F2 \EB\E8\ED\E8\E8 \EC\E0\F2\F0\E8\F6\FB
                     const int mb_shift = d1_shift + ib * b1;
-                    // верхняя и нижняя границы чтения строк в блоке ib (локальная нумерация)
+                    // \E2\E5\F0\F5\ED\FF\FF \E8 \ED\E8\E6\ED\FF\FF \E3\F0\E0\ED\E8\F6\FB \F7\F2\E5\ED\E8\FF \F1\F2\F0\EE\EA \E2 \E1\EB\EE\EA\E5 ib (\EB\EE\EA\E0\EB\FC\ED\E0\FF \ED\F3\EC\E5\F0\E0\F6\E8\FF)
                     const int i_lb = max(lambda, mb_shift);
                     const int i_ub = min(mb_shift + b1, N);
-                    // указатели на начала блоков ib матриц Y и W
+                    // \F3\EA\E0\E7\E0\F2\E5\EB\E8 \ED\E0 \ED\E0\F7\E0\EB\E0 \E1\EB\EE\EA\EE\E2 ib \EC\E0\F2\F0\E8\F6 Y \E8 W
                     double* Yrow_shifted = Y + i_lb*b2 + it;
                     double* Wrow = W + i_lb*b2;
                     const double* v_shifted = v + i_lb;
@@ -2035,12 +2038,12 @@ double* QR_WY_block(double* A, const int N, const int b1, const int b2)
             }
         }
 
-        // * Преобразование остальной части матрицы A:
+        // * \CF\F0\E5\EE\E1\F0\E0\E7\EE\E2\E0\ED\E8\E5 \EE\F1\F2\E0\EB\FC\ED\EE\E9 \F7\E0\F1\F2\E8 \EC\E0\F2\F0\E8\F6\FB A:
         // A(lamda:M-1, t:N-1) = (I + W*(Y^t))^t * A(lamda:M-1, t:N-1) (==)
         // (==) A(lamda:M-1, t:N-1) + [Y*(W^t)] * A(lamda:M-1, t:N-1)
 
-        // Умножение Y * W^t
-        // Матрица 'WY' будет иметь 'b1' x 'b1' размещение
+        // \D3\EC\ED\EE\E6\E5\ED\E8\E5 Y * W^t
+        // \CC\E0\F2\F0\E8\F6\E0 'WY' \E1\F3\E4\E5\F2 \E8\EC\E5\F2\FC 'b1' x 'b1' \F0\E0\E7\EC\E5\F9\E5\ED\E8\E5
 #pragma omp parallel for schedule(dynamic, 1)
         for (int ib = 0; ib < col_b_count; ++ib)
         {
@@ -2068,7 +2071,7 @@ double* QR_WY_block(double* A, const int N, const int b1, const int b2)
 
                 for (int i = 0; i < i_iter_count; ++i)
                 {
-                    // Ограничение, связанное со ступенчатым видом матрицы Y
+                    // \CE\E3\F0\E0\ED\E8\F7\E5\ED\E8\E5, \F1\E2\FF\E7\E0\ED\ED\EE\E5 \F1\EE \F1\F2\F3\EF\E5\ED\F7\E0\F2\FB\EC \E2\E8\E4\EE\EC \EC\E0\F2\F0\E8\F6\FB Y
                     const int kbound = min(t, i_mb_shift+i_lb + i+1) - lambda;
                     const int Wrow_diff_val = b2 - kbound;
                                         
@@ -2094,8 +2097,8 @@ double* QR_WY_block(double* A, const int N, const int b1, const int b2)
 
         copy_minor_block(Abuf, A, N, b1, b2, d1_shift, d2_shift);
 
-        // Умножение A(lamda:M-1, t:N-1) += (Y * W^t) * A(lamda:M-1, t:N-1)
-        // Размещение: (b1 x b2) = (b1 x b1) * (b1 x b2)
+        // \D3\EC\ED\EE\E6\E5\ED\E8\E5 A(lamda:M-1, t:N-1) += (Y * W^t) * A(lamda:M-1, t:N-1)
+        // \D0\E0\E7\EC\E5\F9\E5\ED\E8\E5: (b1 x b2) = (b1 x b1) * (b1 x b2)
 #pragma omp parallel for schedule(dynamic, 1)
         for (int ib = 0; ib < col_b_count; ++ib)
         {
@@ -2149,7 +2152,7 @@ double* QR_WY_block(double* A, const int N, const int b1, const int b2)
             }
         }
 
-        // Копирование преобразованной части матрицы A
+        // \CA\EE\EF\E8\F0\EE\E2\E0\ED\E8\E5 \EF\F0\E5\EE\E1\F0\E0\E7\EE\E2\E0\ED\ED\EE\E9 \F7\E0\F1\F2\E8 \EC\E0\F2\F0\E8\F6\FB A
         copy_minor_block(A, Abuf, N, b1, b2, d1_shift, d2_shift);
 
     }// WHILE
@@ -2221,8 +2224,8 @@ double* QR_WY_double_block(double* A,
 
             // Shift for 'lambda+it'-th element of matrix column
             const int full_shift = lambda + it;
-            // Индекс большого блока, содержащего 'lambda+it'-ый диагональный элемент,
-            // считая от блока, содержащего 'lambda'-ый элемент
+            // \C8\ED\E4\E5\EA\F1 \E1\EE\EB\FC\F8\EE\E3\EE \E1\EB\EE\EA\E0, \F1\EE\E4\E5\F0\E6\E0\F9\E5\E3\EE 'lambda+it'-\FB\E9 \E4\E8\E0\E3\EE\ED\E0\EB\FC\ED\FB\E9 \FD\EB\E5\EC\E5\ED\F2,
+            // \F1\F7\E8\F2\E0\FF \EE\F2 \E1\EB\EE\EA\E0, \F1\EE\E4\E5\F0\E6\E0\F9\E5\E3\EE 'lambda'-\FB\E9 \FD\EB\E5\EC\E5\ED\F2
             const int b_begin = (full_shift - d1_shift) / b1;
             // Index of small-block-column,
             // which contains 'lambda+it'-th column

@@ -1,11 +1,15 @@
-#include "multiplication.h"
+#include <multiplication.h>
 
+#include <stdlib.h>
 #include <math.h>
 #include <omp.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+#define max(a,b) ((a) > (b) ? (a) : (b))
+#define min(a,b) ((a) < (b) ? (a) : (b))
 
 void matrix_multiplication_double_block(double* gen_matrix,
     const double* left_matrix, const double* right_matrix,
